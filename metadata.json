@@ -1,0 +1,6 @@
+{
+  "name": "CoalGuard AI",
+  "description": "Smart Governance and Vigilance Command Center for Coal Mining Oversight and Environmental Compliance",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
