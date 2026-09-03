@@ -35,3 +35,26 @@ export interface MineRecord {
   longitude: number;
   flags: { title: string; note: string; severity: number }[];
 }
+
+export interface CitizenReportRecord {
+  id: string; // e.g. 'CR-882'
+  pin: string; // e.g. '1428'
+  mineId: string;
+  mineName: string;
+  village: string;
+  category: string;
+  categoryKey: string;
+  date: string;
+  timestamp: string;
+  details: string;
+  stage: 1 | 2 | 3 | 4 | 5;
+  statusText: string;
+  statusColor: 'emerald' | 'blue' | 'red' | 'amber';
+  geotagCorrelationPct?: number;
+  contributedToScn?: boolean;
+  scnNumber?: string;
+  scnNoticeDate?: string;
+  scnOutcome?: string;
+  outcomeStatus?: 'pending' | 'resolved' | 'active_notice';
+  estimatedNextUpdate?: string;
+}

@@ -15,7 +15,7 @@ import {
 import { AuthUser } from '../types';
 
 interface AuthGatewayProps {
-  onSelectRole: (user: AuthUser) => void;
+  onSelectRole: (user: AuthUser, route: string) => void;
 }
 
 export default function AuthGateway({ onSelectRole }: AuthGatewayProps) {
@@ -29,7 +29,7 @@ export default function AuthGateway({ onSelectRole }: AuthGatewayProps) {
       agency: 'DGMS / Ministry of Coal',
       badgeText: 'Restricted Officer Access (Tier-1)',
       avatarInitials: 'AS'
-    });
+    }, '/command');
   };
 
   const handleOperatorLogin = () => {
@@ -40,7 +40,7 @@ export default function AuthGateway({ onSelectRole }: AuthGatewayProps) {
       agency: 'Eastern Coalfields Limited (CIL)',
       badgeText: 'Regulated Industry Portal (Coal India / Captive)',
       avatarInitials: 'EC'
-    });
+    }, '/operator');
   };
 
   const handleCitizenLogin = () => {
@@ -51,7 +51,7 @@ export default function AuthGateway({ onSelectRole }: AuthGatewayProps) {
       agency: 'Public Environmental Vigilance',
       badgeText: 'Citizen Public Grievance',
       avatarInitials: 'KP'
-    });
+    }, '/citizen');
   };
 
   return (
