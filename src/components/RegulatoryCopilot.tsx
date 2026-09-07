@@ -44,7 +44,7 @@ export default function RegulatoryCopilot({
     {
       id: '1',
       sender: 'assistant',
-      text: `Greetings. I am the CoalGuard AI Regulatory Copilot, trained on the Coal Mines Regulations 2017, MoEFCC Environmental Clearance guidelines, and real-time Sentinel-2 / Cartosat-3 satellite telemetry.\n\nCurrently analyzing active surveillance data for **${selectedMine?.name || 'Rajmahal Open Cast Project'}**. How may I assist your statutory investigation?`,
+      text: `Greetings. I am the KhananRakshak AI (K-AI) Regulatory Copilot, trained on the Coal Mines Regulations 2017, MoEFCC Environmental Clearance guidelines, and real-time Sentinel-2 / Cartosat-3 satellite telemetry.\n\nCurrently analyzing active surveillance data for **${selectedMine?.name || 'Rajmahal Open Cast Project'}**. How may I assist your statutory investigation?`,
       timestamp: '11:20 AM',
       statutoryReference: 'DGMS / MoEFCC Surveillance Protocol 2026'
     }

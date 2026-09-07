@@ -28,15 +28,22 @@ import {
   Sparkles,
   ArrowRight
 } from 'lucide-react';
-import { MineRecord, AuthUser, CitizenReportRecord } from '../types';
+import { MineRecord, AuthUser, CitizenReportRecord, UserRole } from '../types';
 import CitizenReportTracker from './CitizenReportTracker';
 import CitizenReceiptCard from './CitizenReceiptCard';
+import GlobalHeaderControls from './GlobalHeaderControls';
 
 interface CitizenPortalProps {
   currentUser: AuthUser;
   mines: MineRecord[];
   onSignOut: () => void;
   triggerToast: (msg: string) => void;
+  isOnline?: boolean;
+  isSyncing?: boolean;
+  pendingSyncCount?: number;
+  onToggleNetwork?: () => void;
+  onOpenSyncModal?: () => void;
+  onSwitchPortal?: (role: UserRole, route: string) => void;
 }
 
 type CitizenTab = 'track_my_report' | 'file_concern' | 'public_map' | 'track_reports' | 'environmental_health';
@@ -152,7 +159,13 @@ export default function CitizenPortal({
   currentUser,
   mines,
   onSignOut,
-  triggerToast
+  triggerToast,
+  isOnline = true,
+  isSyncing = false,
+  pendingSyncCount = 0,
+  onToggleNetwork = () => {},
+  onOpenSyncModal = () => {},
+  onSwitchPortal = () => {}
 }: CitizenPortalProps) {
   const [activeTab, setActiveTab] = useState<CitizenTab>('file_concern');
   
@@ -401,16 +414,19 @@ export default function CitizenPortal({
               </div>
             </div>
 
-            {/* Switch Role / Sign Out Action Button */}
-            <button
-              id="btn-citizen-sign-out"
-              onClick={onSignOut}
-              className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-all flex items-center gap-2 shadow-xs cursor-pointer border border-slate-700 hover:border-slate-500"
-              title="Return to National Login Gateway"
-            >
-              <LogOut className="w-3.5 h-3.5 text-amber-400" />
-              <span>Switch Role / Sign Out</span>
-            </button>
+            {/* Global Offline-First Simulator & Universal 5-Role Switcher */}
+            <GlobalHeaderControls
+              currentUser={currentUser}
+              currentPath="/citizen"
+              isOnline={isOnline}
+              isSyncing={isSyncing}
+              pendingSyncCount={pendingSyncCount}
+              onToggleNetwork={onToggleNetwork}
+              onOpenSyncModal={onOpenSyncModal}
+              onSwitchPortal={onSwitchPortal}
+              onSignOut={onSignOut}
+              theme="light"
+            />
           </div>
         </div>
 

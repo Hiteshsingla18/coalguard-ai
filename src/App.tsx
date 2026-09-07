@@ -26,8 +26,9 @@ import {
   ArrowLeftRight
 } from 'lucide-react';
 
-import { MineRecord, ViolationStatus, GovNavType, AuthUser } from './types';
+import { MineRecord, ViolationStatus, GovNavType, AuthUser, UserRole, OfflineMutation, WorkforceAttendanceRecord } from './types';
 import { MINES_DATA } from './data/mines';
+import { INITIAL_ATTENDANCE_ROSTER } from './data/initialAttendance';
 import SurveillanceMap from './components/SurveillanceMap';
 import MineExplorer from './components/MineExplorer';
 import EvidenceChain from './components/EvidenceChain';
@@ -37,8 +38,14 @@ import RegulatoryCopilot from './components/RegulatoryCopilot';
 import AuthGateway from './components/AuthGateway';
 import OperatorPortal from './components/OperatorPortal';
 import CitizenPortal from './components/CitizenPortal';
+import MineOfficerPortal from './components/MineOfficerPortal';
+import LabourMobileApp from './components/LabourMobileApp';
+import SyncQueueModal from './components/SyncQueueModal';
+import GlobalHeaderControls from './components/GlobalHeaderControls';
+import StatutoryDossierModal from './components/StatutoryDossierModal';
+import KhananRakshakLogo from './components/KhananRakshakLogo';
 
-// Predefined official user personas
+// Predefined official user personas for all 5 roles
 const GOV_OFFICER_USER: AuthUser = {
   role: 'gov',
   name: 'Dr. A. Sharma',
@@ -66,12 +73,56 @@ const CITIZEN_USER: AuthUser = {
   avatarInitials: 'KP'
 };
 
+const OFFICER_USER: AuthUser = {
+  role: 'officer',
+  name: 'Er. Vikram Sengupta',
+  designation: 'Senior Safety Officer (First Class Mgr #9041)',
+  agency: 'DGMS / ECL Rajmahal Field Station',
+  badgeText: 'Colliery Field Safety & CAPA Station',
+  avatarInitials: 'VS',
+  colliery: 'Rajmahal OCP'
+};
+
+const LABOUR_USER: AuthUser = {
+  role: 'labour',
+  name: 'Ramesh Soren',
+  designation: 'Drill & Heavy Equipment Operator',
+  agency: 'Rajmahal Area Colliery Worker Desk',
+  badgeText: 'Labour Mobile App & Offline Geofence',
+  avatarInitials: 'RS',
+  workerId: 'WKR-8812',
+  colliery: 'Rajmahal OCP'
+};
+
+const INITIAL_MUTATIONS: OfflineMutation[] = [
+  {
+    id: 'MUT-001',
+    idempotencyKey: 'idem-c892-01',
+    type: 'capa_issuance',
+    title: 'Issue CAPA-399: High-Visibility Vest Obscured',
+    timestamp: 'Today, 07:45 AM',
+    origin: 'mine_officer',
+    status: 'synced',
+    payloadSummary: 'Assigned to Overman Ramesh Yadav for Worker #309 in East Coal Bench #2 (Conf 91.2%).'
+  },
+  {
+    id: 'MUT-002',
+    idempotencyKey: 'idem-c892-02',
+    type: 'shift_attendance',
+    title: 'Shift Attendance: Ramesh Soren (Shift A)',
+    timestamp: 'Yesterday, 06:02 AM',
+    origin: 'labour_app',
+    status: 'synced',
+    payloadSummary: 'Punched at 06:02 AM in Pit #2. Geofence Verified. Gov Record: GOV-ATT-8811.'
+  }
+];
+
 export default function App() {
-  // Path-based routing: '/', '/command', '/operator', '/citizen'
+  // Path-based routing: '/', '/command', '/operator', '/citizen', '/officer', '/labour'
   const [currentPath, setCurrentPath] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const p = window.location.pathname;
-      if (p === '/command' || p === '/operator' || p === '/citizen') {
+      if (p === '/command' || p === '/operator' || p === '/citizen' || p === '/officer' || p === '/labour') {
         return p;
       }
     }
@@ -85,19 +136,88 @@ export default function App() {
       if (p === '/command') return GOV_OFFICER_USER;
       if (p === '/operator') return OPERATOR_USER;
       if (p === '/citizen') return CITIZEN_USER;
+      if (p === '/officer') return OFFICER_USER;
+      if (p === '/labour') return LABOUR_USER;
     }
     return null;
   });
+
+  // Offline-First Simulation State
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState<boolean>(false);
+  const [mutationQueue, setMutationQueue] = useState<OfflineMutation[]>(INITIAL_MUTATIONS);
+
+  // Colliery Workforce Attendance Roster State (Synchronized across Labour, Officer, and Operator portals)
+  const [attendanceRoster, setAttendanceRoster] = useState<WorkforceAttendanceRecord[]>(INITIAL_ATTENDANCE_ROSTER);
+
+  const handleRecordShiftAttendance = (newRecord: WorkforceAttendanceRecord) => {
+    setAttendanceRoster(prev => [newRecord, ...prev]);
+  };
+
+  const pendingSyncCount = mutationQueue.filter(m => m.status === 'pending').length;
+
+  const handleToggleNetwork = () => {
+    if (isOnline) {
+      setIsOnline(false);
+      triggerToast('Subterranean Offline Mode engaged. Actions will write to local mutation queue with UUIDs.');
+    } else {
+      setIsOnline(true);
+      setIsSyncing(true);
+      triggerToast('Reconnecting to Central Server... Uploading Queued Mutations with Idempotency Key...');
+      setTimeout(() => {
+        setMutationQueue(prev => prev.map(m => m.status === 'pending' ? { ...m, status: 'synced' } : m));
+        setIsSyncing(false);
+        triggerToast('✓ Central Sync Complete: All local mutations uploaded and acknowledged by Central Server.');
+      }, 2000);
+    }
+  };
+
+  const handleAddOfflineMutation = (mutation: Omit<OfflineMutation, 'id' | 'idempotencyKey' | 'timestamp' | 'status'>): string => {
+    const nextId = `MUT-${String(mutationQueue.length + 1).padStart(3, '0')}`;
+    const localUuid = `uuid-${Math.random().toString(36).substring(2, 9)}`;
+    const idemKey = `idem-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newMut: OfflineMutation = {
+      ...mutation,
+      id: nextId,
+      idempotencyKey: idemKey,
+      timestamp: 'Just now',
+      status: isOnline ? 'synced' : 'pending'
+    };
+    setMutationQueue(prev => [newMut, ...prev]);
+    return localUuid;
+  };
+
+  const handleClearSyncedMutations = () => {
+    setMutationQueue(prev => prev.filter(m => m.status === 'pending'));
+    triggerToast('Cleared synced audit logs from local cache.');
+  };
+
+  const handleForceSync = () => {
+    if (pendingSyncCount === 0) {
+      triggerToast('All mutations already in sync with Central Server.');
+      return;
+    }
+    setIsSyncing(true);
+    triggerToast('Uploading queued mutations to central server...');
+    setTimeout(() => {
+      setMutationQueue(prev => prev.map(m => ({ ...m, status: 'synced' })));
+      setIsSyncing(false);
+      triggerToast('✓ Central server acknowledged all mutations.');
+    }, 1500);
+  };
 
   // Browser history sync
   useEffect(() => {
     const handlePopState = () => {
       const p = window.location.pathname;
-      const normalized = (p === '/command' || p === '/operator' || p === '/citizen') ? p : '/';
+      const normalized = (p === '/command' || p === '/operator' || p === '/citizen' || p === '/officer' || p === '/labour') ? p : '/';
       setCurrentPath(normalized);
       if (normalized === '/command') setCurrentUser(GOV_OFFICER_USER);
       else if (normalized === '/operator') setCurrentUser(OPERATOR_USER);
       else if (normalized === '/citizen') setCurrentUser(CITIZEN_USER);
+      else if (normalized === '/officer') setCurrentUser(OFFICER_USER);
+      else if (normalized === '/labour') setCurrentUser(LABOUR_USER);
       else setCurrentUser(null);
     };
 
@@ -112,6 +232,18 @@ export default function App() {
     setCurrentPath(newPath);
   };
 
+  const handleSwitchPortal = (targetRole: UserRole, targetRoute: string) => {
+    let userObj = GOV_OFFICER_USER;
+    if (targetRole === 'operator') userObj = OPERATOR_USER;
+    else if (targetRole === 'citizen') userObj = CITIZEN_USER;
+    else if (targetRole === 'officer') userObj = OFFICER_USER;
+    else if (targetRole === 'labour') userObj = LABOUR_USER;
+
+    setCurrentUser(userObj);
+    navigate(targetRoute);
+    triggerToast(`Switched to ${userObj.badgeText}`);
+  };
+
   // DGMS Officer Command Center navigation: overview, explorer, evidence, citizen, risk
   const [officerNav, setOfficerNav] = useState<GovNavType>('overview');
 
@@ -120,9 +252,32 @@ export default function App() {
   const [selectedMine, setSelectedMine] = useState<MineRecord | null>(MINES_DATA[0]); // Default to Rajmahal OCP
   const [drawerOpen, setDrawerOpen] = useState<boolean>(true);
 
-  // Filters for Overview Map
+  // Filters for Overview Map & Registry
   const [filterState, setFilterState] = useState<string>('All States');
+  const [filterSubsidiary, setFilterSubsidiary] = useState<string>('All Subsidiaries');
   const [filterRisk, setFilterRisk] = useState<string>('All Risks');
+
+  // Dynamic statistics calculated from the 25-mine registry
+  const totalMinesCount = mines.length;
+  const totalActiveWorkforce = mines.reduce(
+    (acc, m) => acc + (m.workforceSplit?.total || m.activeWorkforce || 0),
+    0
+  );
+  const totalPermanentWorkforce = mines.reduce(
+    (acc, m) => acc + (m.workforceSplit?.permanent || 0),
+    0
+  );
+  const totalContractualWorkforce = mines.reduce(
+    (acc, m) => acc + (m.workforceSplit?.contractual || 0),
+    0
+  );
+  const criticalBreaches = mines.filter(
+    (m) => m.complianceScore < 65 || m.status === 'critical'
+  );
+  const criticalBreachesCount = criticalBreaches.length;
+  const avgComplianceRating = (
+    mines.reduce((acc, m) => acc + m.complianceScore, 0) / (mines.length || 1)
+  ).toFixed(1);
 
   // Violation status workflow across government and operator
   const [violationStatus, setViolationStatus] = useState<ViolationStatus>('pending_review');
@@ -149,6 +304,8 @@ export default function App() {
     triggerToast(`Logged into ${
       route === '/command' ? 'DGMS Surveillance Command' :
       route === '/operator' ? 'Colliery Operator Desk' :
+      route === '/officer' ? 'Mine Safety Officer Portal' :
+      route === '/labour' ? 'Colliery Labour Mobile App' :
       'Citizen Environmental Vigilance Portal'
     }.`);
   };
@@ -230,6 +387,21 @@ export default function App() {
           mines={mines}
           onSignOut={handleSignOut}
           triggerToast={triggerToast}
+          isOnline={isOnline}
+          isSyncing={isSyncing}
+          pendingSyncCount={pendingSyncCount}
+          onToggleNetwork={handleToggleNetwork}
+          onOpenSyncModal={() => setIsSyncModalOpen(true)}
+          onSwitchPortal={handleSwitchPortal}
+        />
+        <SyncQueueModal
+          isOpen={isSyncModalOpen}
+          onClose={() => setIsSyncModalOpen(false)}
+          isOnline={isOnline}
+          isSyncing={isSyncing}
+          mutations={mutationQueue}
+          onTriggerSync={handleForceSync}
+          onClearSynced={handleClearSyncedMutations}
         />
       </>
     );
@@ -262,6 +434,22 @@ export default function App() {
           onSignOut={handleSignOut}
           onOpenDossierModal={() => setShowDossierModal(true)}
           triggerToast={triggerToast}
+          isOnline={isOnline}
+          isSyncing={isSyncing}
+          pendingSyncCount={pendingSyncCount}
+          onToggleNetwork={handleToggleNetwork}
+          onOpenSyncModal={() => setIsSyncModalOpen(true)}
+          onSwitchPortal={handleSwitchPortal}
+          attendanceRoster={attendanceRoster}
+        />
+        <SyncQueueModal
+          isOpen={isSyncModalOpen}
+          onClose={() => setIsSyncModalOpen(false)}
+          isOnline={isOnline}
+          isSyncing={isSyncing}
+          mutations={mutationQueue}
+          onTriggerSync={handleForceSync}
+          onClearSynced={handleClearSyncedMutations}
         />
 
         {/* Official Inspection Dossier Modal for Operator */}
@@ -282,9 +470,21 @@ export default function App() {
               </div>
 
               <div className="p-6 overflow-y-auto space-y-4 font-serif text-slate-900 text-xs">
-                <div className="border-b-2 border-slate-900 pb-3 text-center">
-                  <div className="font-bold text-sm tracking-wide uppercase font-sans">Ministry of Coal &bull; Government of India</div>
-                  <div className="text-[11px] font-sans text-slate-600">Directorate General of Mines Vigilance &amp; Environmental Oversight</div>
+                <div className="border-b-2 border-slate-900 pb-3 text-center space-y-1">
+                  <div className="flex justify-center mb-1">
+                    <img 
+                      src="/src/assets/logo.png" 
+                      alt="K Logo" 
+                      className="h-10 w-10 object-contain rounded-full shadow-xs" 
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.parentElement?.classList.add('w-10', 'h-10', 'rounded-full', 'bg-[#0A192F]', 'border', 'border-cyan-400', 'flex', 'items-center', 'justify-center', 'text-cyan-300', 'font-mono', 'font-black', 'text-sm');
+                        e.currentTarget.parentElement?.appendChild(document.createTextNode('K'));
+                      }}
+                    />
+                  </div>
+                  <div className="font-bold text-sm tracking-wide uppercase font-sans">Government of India &bull; Ministry of Coal</div>
+                  <div className="text-[11px] font-sans text-slate-600">KhananRakshak AI (K-AI) &bull; DGMS Environmental Oversight (SIH26024)</div>
                   <div className="font-bold text-xs mt-1 text-red-700 font-sans">STATUTORY INSPECTION &amp; SHOW-CAUSE DOSSIER #ENV-082</div>
                 </div>
 
@@ -345,6 +545,96 @@ export default function App() {
   }
 
   // =========================================================================
+  // ROUTE 4: '/officer' -> Mine Safety Officer Portal (Field Operations & CAPA)
+  // =========================================================================
+  if (currentPath === '/officer') {
+    return (
+      <>
+        {toastMessage && (
+          <div className="fixed top-4 right-4 z-50 bg-[#0A192F] text-white text-xs px-4 py-3 rounded-lg shadow-xl border border-blue-500/30 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200 max-w-md">
+            <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shrink-0"></div>
+            <p className="flex-1 font-medium">{toastMessage}</p>
+            <button 
+              onClick={() => setToastMessage(null)}
+              className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        <MineOfficerPortal
+          currentUser={currentUser}
+          currentPath="/officer"
+          isOnline={isOnline}
+          isSyncing={isSyncing}
+          pendingSyncCount={pendingSyncCount}
+          onToggleNetwork={handleToggleNetwork}
+          onOpenSyncModal={() => setIsSyncModalOpen(true)}
+          onSwitchPortal={handleSwitchPortal}
+          onSignOut={handleSignOut}
+          triggerToast={triggerToast}
+          onAddOfflineMutation={handleAddOfflineMutation}
+          attendanceRoster={attendanceRoster}
+        />
+        <SyncQueueModal
+          isOpen={isSyncModalOpen}
+          onClose={() => setIsSyncModalOpen(false)}
+          isOnline={isOnline}
+          isSyncing={isSyncing}
+          mutations={mutationQueue}
+          onTriggerSync={handleForceSync}
+          onClearSynced={handleClearSyncedMutations}
+        />
+      </>
+    );
+  }
+
+  // =========================================================================
+  // ROUTE 5: '/labour' -> Colliery Labour Mobile App (Mobile Phone Bezel View)
+  // =========================================================================
+  if (currentPath === '/labour') {
+    return (
+      <>
+        {toastMessage && (
+          <div className="fixed top-4 right-4 z-50 bg-[#0A192F] text-white text-xs px-4 py-3 rounded-lg shadow-xl border border-amber-500/30 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200 max-w-md">
+            <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></div>
+            <p className="flex-1 font-medium">{toastMessage}</p>
+            <button 
+              onClick={() => setToastMessage(null)}
+              className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        <LabourMobileApp
+          currentUser={currentUser}
+          currentPath="/labour"
+          isOnline={isOnline}
+          isSyncing={isSyncing}
+          pendingSyncCount={pendingSyncCount}
+          onToggleNetwork={handleToggleNetwork}
+          onOpenSyncModal={() => setIsSyncModalOpen(true)}
+          onSwitchPortal={handleSwitchPortal}
+          onSignOut={handleSignOut}
+          triggerToast={triggerToast}
+          onAddOfflineMutation={handleAddOfflineMutation}
+          onRecordShiftAttendance={handleRecordShiftAttendance}
+        />
+        <SyncQueueModal
+          isOpen={isSyncModalOpen}
+          onClose={() => setIsSyncModalOpen(false)}
+          isOnline={isOnline}
+          isSyncing={isSyncing}
+          mutations={mutationQueue}
+          onTriggerSync={handleForceSync}
+          onClearSynced={handleClearSyncedMutations}
+        />
+      </>
+    );
+  }
+
+  // =========================================================================
   // ROUTE 4: '/command' -> Directorate General of Mines Surveillance Command
   // (Full Command, Satellite Radar, SCN Issuance, AI Copilot, dark navy/gold)
   // =========================================================================
@@ -374,18 +664,27 @@ export default function App() {
         {/* Branding & Active Role Profile at Top */}
         <div className="p-4 border-b border-slate-800/80 shrink-0 space-y-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white shadow-md font-black text-sm shrink-0 bg-[#1E40AF]">
-              <Shield className="w-5 h-5 text-white" />
+            <div className="relative inline-flex items-center justify-center shrink-0">
+              <img 
+                src="/src/assets/logo.png" 
+                alt="K Logo" 
+                className="h-9 w-9 object-contain rounded-full" 
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.parentElement?.classList.add('w-9', 'h-9', 'rounded-full', 'bg-[#0A192F]', 'border-2', 'border-cyan-400', 'flex', 'items-center', 'justify-center', 'text-cyan-300', 'font-mono', 'font-black', 'text-sm', 'shadow-[0_0_12px_rgba(6,182,212,0.5)]');
+                  e.currentTarget.parentElement?.appendChild(document.createTextNode('K'));
+                }}
+              />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-base tracking-tight text-white truncate">CoalGuard AI</span>
+                <span className="font-extrabold text-base tracking-tight text-white truncate">KhananRakshak AI</span>
                 <span className="bg-blue-600/30 text-blue-300 text-[10px] font-bold px-1.5 py-0.5 rounded border border-blue-500/30 font-mono">
-                  MoC
+                  K-AI
                 </span>
               </div>
               <div className="text-[11px] text-slate-400 leading-tight truncate mt-0.5">
-                Ministry of Coal &bull; Surveillance Command
+                AI Smart Governance &bull; SIH26024
               </div>
             </div>
           </div>
@@ -561,13 +860,27 @@ export default function App() {
         {/* TOP STATUS & COMMAND HEADER */}
         <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shrink-0 shadow-2xs">
           <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-2 min-w-0">
+            {/* Breadcrumb & Global Header K Emblem */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="relative inline-flex items-center justify-center shrink-0">
+                <img 
+                  src="/src/assets/logo.png" 
+                  alt="K Logo" 
+                  className="h-7 w-7 object-contain rounded-full" 
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.parentElement?.classList.add('w-7', 'h-7', 'rounded-full', 'bg-[#0A192F]', 'border', 'border-cyan-400', 'flex', 'items-center', 'justify-center', 'text-cyan-300', 'font-mono', 'font-black', 'text-xs');
+                    e.currentTarget.parentElement?.appendChild(document.createTextNode('K'));
+                  }}
+                />
+              </div>
+              <span className="font-bold text-sm text-slate-900 truncate">KhananRakshak AI</span>
+              <span className="text-slate-300">/</span>
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider truncate">
                 Surveillance Command
               </span>
               <span className="text-slate-300">/</span>
-              <span className="font-bold text-sm text-slate-900 truncate">
+              <span className="font-semibold text-xs text-slate-700 truncate hidden md:inline">
                 {officerNav === 'overview' && 'Overview & Real-Time Radar'}
                 {officerNav === 'explorer' && 'National Mine Explorer Table'}
                 {officerNav === 'evidence' && 'Evidence Chain Investigation (ENV-082)'}
@@ -611,16 +924,19 @@ export default function App() {
                 <span>Legal Dossier</span>
               </button>
 
-              {/* PROMINENT SWITCH ROLE / SIGN OUT BUTTON */}
-              <button
-                id="btn-switch-role"
-                onClick={handleSignOut}
-                className="text-xs bg-slate-900 hover:bg-slate-800 text-white px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer border border-slate-700 hover:border-blue-400 group"
-                title="Return to National Login Gateway"
-              >
-                <LogOut className="w-3.5 h-3.5 text-slate-300 group-hover:text-amber-400 transition-colors" />
-                <span className="font-medium whitespace-nowrap">Switch Role / Sign Out</span>
-              </button>
+              {/* Universal 5-Role Switcher & Offline Simulator */}
+              <GlobalHeaderControls
+                currentUser={currentUser}
+                currentPath="/command"
+                isOnline={isOnline}
+                isSyncing={isSyncing}
+                pendingSyncCount={pendingSyncCount}
+                onToggleNetwork={handleToggleNetwork}
+                onOpenSyncModal={() => setIsSyncModalOpen(true)}
+                onSwitchPortal={handleSwitchPortal}
+                onSignOut={handleSignOut}
+                theme="light"
+              />
             </div>
           </div>
         </header>
@@ -657,35 +973,39 @@ export default function App() {
                 </div>
               )}
 
-              {/* KPI Telemetry Header */}
+              {/* KPI Telemetry Header - Dynamically Computed Across 25 Nationwide Mines */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs">
-                  <div className="text-[10px] uppercase font-bold text-slate-500">Mines Under Surveillance</div>
-                  <div className="text-2xl font-bold text-slate-900 mt-1">1,428</div>
-                  <div className="text-xs text-slate-500 mt-0.5">8 Major National Basins</div>
+                  <div className="text-[10px] uppercase font-bold text-slate-500">Total Mines Monitored</div>
+                  <div className="text-2xl font-bold text-slate-900 mt-1">{totalMinesCount} Facilities</div>
+                  <div className="text-xs text-slate-500 mt-0.5">7 Coal States &bull; 8 CIL/SCCL Subsidiaries</div>
                 </div>
 
                 <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs">
-                  <div className="text-[10px] uppercase font-bold text-slate-500">Critical Boundary Deviations</div>
+                  <div className="text-[10px] uppercase font-bold text-slate-500">Active Workforce</div>
+                  <div className="text-2xl font-bold text-slate-900 mt-1">{totalActiveWorkforce.toLocaleString()}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    {totalPermanentWorkforce.toLocaleString()} Regular &bull; {totalContractualWorkforce.toLocaleString()} Contractual
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs">
+                  <div className="text-[10px] uppercase font-bold text-slate-500">Critical Breaches</div>
                   <div className="text-2xl font-bold text-red-600 mt-1 flex items-center gap-2">
-                    <span>2 Active</span>
+                    <span>{criticalBreachesCount} Active</span>
                     <span className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded uppercase">
-                      SCN Issued
+                      SCN Triggered
                     </span>
                   </div>
-                  <div className="text-xs text-slate-500 mt-0.5">Rajmahal OCP &amp; Raniganj Deep</div>
+                  <div className="text-xs text-slate-500 mt-0.5 truncate" title={criticalBreaches.map(m => m.name.split(' ')[0]).join(', ')}>
+                    {criticalBreaches.map(m => m.name.split(' ')[0]).join(', ')}
+                  </div>
                 </div>
 
                 <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs">
                   <div className="text-[10px] uppercase font-bold text-slate-500">Average Compliance Rating</div>
-                  <div className="text-2xl font-bold text-emerald-700 mt-1">87.2%</div>
-                  <div className="text-xs text-emerald-600 mt-0.5">&uarr; +2.4% vs prev quarter</div>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs">
-                  <div className="text-[10px] uppercase font-bold text-slate-500">Citizen Reports Correlated</div>
-                  <div className="text-2xl font-bold text-blue-700 mt-1">43 Verified</div>
-                  <div className="text-xs text-slate-500 mt-0.5">98.4% AI Satellite match</div>
+                  <div className="text-2xl font-bold text-emerald-700 mt-1">{avgComplianceRating}%</div>
+                  <div className="text-xs text-emerald-600 mt-0.5">Nationwide Sentinel-2 Real-Time</div>
                 </div>
               </div>
 
@@ -697,27 +1017,49 @@ export default function App() {
                     <span>Surveillance Filter:</span>
                   </div>
 
+                  {/* State Filter - 7 Indian States */}
                   <select
                     value={filterState}
                     onChange={(e) => setFilterState(e.target.value)}
-                    className="px-2.5 py-1.5 border border-slate-300 rounded bg-white text-slate-800 text-xs focus:ring-1 focus:ring-blue-500"
+                    className="px-2.5 py-1.5 border border-slate-300 rounded bg-white text-slate-800 text-xs font-medium focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="All States">All Coal States</option>
-                    <option value="Jharkhand">Jharkhand</option>
-                    <option value="West Bengal">West Bengal</option>
-                    <option value="Chhattisgarh">Chhattisgarh</option>
-                    <option value="Odisha">Odisha</option>
-                    <option value="Madhya Pradesh">Madhya Pradesh</option>
+                    <option value="All States">All Coal States (7)</option>
+                    <option value="Jharkhand">Jharkhand (5)</option>
+                    <option value="Chhattisgarh">Chhattisgarh (5)</option>
+                    <option value="Odisha">Odisha (4)</option>
+                    <option value="West Bengal">West Bengal (3)</option>
+                    <option value="Madhya Pradesh">Madhya Pradesh (3)</option>
+                    <option value="Maharashtra">Maharashtra (3)</option>
+                    <option value="Telangana">Telangana (2)</option>
                   </select>
 
+                  {/* Subsidiary Filter - 8 Major Coal Subsidiaries */}
+                  <select
+                    value={filterSubsidiary}
+                    onChange={(e) => setFilterSubsidiary(e.target.value)}
+                    className="px-2.5 py-1.5 border border-slate-300 rounded bg-white text-slate-800 text-xs font-medium focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="All Subsidiaries">All Subsidiaries (8)</option>
+                    <option value="ECL">ECL (Eastern Coalfields)</option>
+                    <option value="BCCL">BCCL (Bharat Coking Coal)</option>
+                    <option value="CCL">CCL (Central Coalfields)</option>
+                    <option value="SECL">SECL (South Eastern Coalfields)</option>
+                    <option value="MCL">MCL (Mahanadi Coalfields)</option>
+                    <option value="NCL">NCL (Northern Coalfields)</option>
+                    <option value="WCL">WCL (Western Coalfields)</option>
+                    <option value="SCCL">SCCL (Singareni Collieries)</option>
+                  </select>
+
+                  {/* Risk Filter - Score Thresholds */}
                   <select
                     value={filterRisk}
                     onChange={(e) => setFilterRisk(e.target.value)}
-                    className="px-2.5 py-1.5 border border-slate-300 rounded bg-white text-slate-800 text-xs focus:ring-1 focus:ring-blue-500"
+                    className="px-2.5 py-1.5 border border-slate-300 rounded bg-white text-slate-800 text-xs font-medium focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="All Risks">All Compliance Statuses</option>
-                    <option value="Critical Only">Critical Breaches (&lt;80%)</option>
-                    <option value="Compliant Only">Fully Compliant (&gt;90%)</option>
+                    <option value="Critical Only">Critical Breaches (&lt;65%)</option>
+                    <option value="Monitor">Needs Monitoring (65-79%)</option>
+                    <option value="Compliant">Compliant (&ge;80%)</option>
                   </select>
                 </div>
 
@@ -737,6 +1079,7 @@ export default function App() {
                   onSelectMine={handleSelectMine}
                   onInvestigateEvidence={handleInvestigateEvidence}
                   filterState={filterState}
+                  filterSubsidiary={filterSubsidiary}
                   filterRisk={filterRisk}
                 />
 
@@ -1009,81 +1352,37 @@ export default function App() {
         </div>
       )}
 
-      {showDossierModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-4 bg-[#0A192F] text-white flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-400" />
-                <span className="font-bold text-sm">Official Statutory Inspection Dossier (PDF Preview)</span>
-              </div>
-              <button 
-                onClick={() => setShowDossierModal(false)}
-                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {/* Statutory SCN Dossier Modal (Printable & Exportable with SHA-256 Signature) */}
+      <StatutoryDossierModal
+        isOpen={showDossierModal}
+        onClose={() => setShowDossierModal(false)}
+        violationStatus={violationStatus}
+        triggerToast={triggerToast}
+      />
 
-            <div className="p-6 overflow-y-auto space-y-4 font-serif text-slate-900 text-xs">
-              <div className="border-b-2 border-slate-900 pb-3 text-center">
-                <div className="font-bold text-sm tracking-wide uppercase font-sans">Ministry of Coal &bull; Government of India</div>
-                <div className="text-[11px] font-sans text-slate-600">Directorate General of Mines Vigilance &amp; Environmental Oversight</div>
-                <div className="font-bold text-xs mt-1 text-red-700 font-sans">STATUTORY INSPECTION &amp; SHOW-CAUSE DOSSIER #ENV-082</div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-[11px] font-sans bg-slate-50 p-3 rounded border border-slate-200">
-                <div><strong>Subject Mine:</strong> Rajmahal Open Cast Project (OCP)</div>
-                <div><strong>Operator:</strong> Eastern Coalfields Limited (ECL)</div>
-                <div><strong>Clearance Ref:</strong> MoEFCC Rule 14(b) - Statutory Boundary Adherence</div>
-                <div><strong>Assessed Area:</strong> 1,276 Ha (Permitted: 1,248 Ha)</div>
-              </div>
-
-              <div className="space-y-2 text-justify leading-relaxed">
-                <p>
-                  <strong>1. Geospatial Breach Finding:</strong> Automated multi-spectral satellite comparison (Sentinel-2 and Cartosat-3) confirmed active coal winning and heavy earthmoving over 28.42 hectares outside the gazetted lease boundary of Rajmahal OCP, Godda district, Jharkhand.
-                </p>
-                <p>
-                  <strong>2. Community Corroboration:</strong> 14 citizen geotagged reports from Simlong and Taljhari village clusters independently verify dust drift and perimeter tree clearing.
-                </p>
-                <p>
-                  <strong>3. Statutory Enforcement Directive:</strong> ECL is directed to submit a formal engineering explanation and differential GPS survey within 48 hours under Regulation 109 of Coal Mines Regulations 2017.
-                </p>
-              </div>
-
-              <div className="pt-4 border-t border-slate-300 flex justify-between items-end font-sans text-[11px]">
-                <div>
-                  <span className="font-bold block">Status:</span>
-                  <span className="text-amber-700 font-semibold">{violationStatus.replace(/_/g, ' ').toUpperCase()}</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold">Authorized Inspecting Officer</div>
-                  <div className="text-slate-500">Directorate General of Mines Vigilance</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  triggerToast('Official Dossier certified PDF downloaded.');
-                  setShowDossierModal(false);
-                }}
-                className="px-4 py-1.5 bg-[#1E40AF] hover:bg-blue-800 text-white text-xs font-semibold rounded flex items-center gap-1.5 cursor-pointer shadow-xs"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download Certified PDF</span>
-              </button>
-              <button
-                onClick={() => setShowDossierModal(false)}
-                className="px-3 py-1.5 border border-slate-300 text-slate-700 text-xs font-semibold rounded hover:bg-slate-200 transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* REAL-TIME OFFLINE MUTATION DRAWER (Bottom Corner Indicator) */}
+      {!isOnline && (
+        <button
+          id="btn-sync-engine-bottom-corner"
+          onClick={() => setIsSyncModalOpen(true)}
+          className="fixed bottom-5 right-5 z-40 bg-amber-400 hover:bg-amber-300 text-slate-950 font-mono text-xs font-extrabold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 border-2 border-slate-900 cursor-pointer transition-all hover:scale-105 active:scale-95"
+          title="Click to view local offline mutation queue with UUIDs and timestamps"
+        >
+          <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping" />
+          <span>Sync Engine: {mutationQueue.filter(m => m.status === 'pending').length} Mutations Cached</span>
+        </button>
       )}
+
+      {/* Offline Sync Queue Inspector Modal */}
+      <SyncQueueModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        isOnline={isOnline}
+        isSyncing={isSyncing}
+        mutations={mutationQueue}
+        onTriggerSync={handleForceSync}
+        onClearSynced={handleClearSyncedMutations}
+      />
     </div>
   );
 }

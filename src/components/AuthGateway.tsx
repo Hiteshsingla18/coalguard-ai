@@ -2,436 +2,402 @@ import React, { useState } from 'react';
 import { 
   Shield, 
   Building2, 
-  Users, 
+  Eye, 
   ArrowRight, 
   Lock, 
-  FileCheck, 
-  KeyRound, 
   Smartphone, 
-  ExternalLink,
-  Info,
+  HardHat, 
+  Satellite,
   CheckCircle2
 } from 'lucide-react';
 import { AuthUser } from '../types';
+import KhananRakshakLogo from './KhananRakshakLogo';
 
 interface AuthGatewayProps {
   onSelectRole: (user: AuthUser, route: string) => void;
 }
 
 export default function AuthGateway({ onSelectRole }: AuthGatewayProps) {
-  const [fontSize, setFontSize] = useState<'normal' | 'large' | 'small'>('normal');
+  const [splashData, setSplashData] = useState<{
+    user: AuthUser;
+    route: string;
+    protocol: string;
+    step: string;
+  } | null>(null);
+
+  const startAuthFlow = (user: AuthUser, route: string, protocol: string) => {
+    setSplashData({
+      user,
+      route,
+      protocol,
+      step: 'Authenticating token with NIC Parichay 2.0 / MeriPehchaan...'
+    });
+
+    // Realistic digital handshake progression
+    setTimeout(() => {
+      setSplashData(prev => prev ? { ...prev, step: 'Verifying X.509 Digital Signature & Role Credentials...' } : null);
+    }, 600);
+
+    setTimeout(() => {
+      setSplashData(prev => prev ? { ...prev, step: 'Session Authorized. Redirecting to Command Console...' } : null);
+    }, 1100);
+
+    setTimeout(() => {
+      onSelectRole(user, route);
+    }, 1500);
+  };
 
   const handleGovLogin = () => {
-    onSelectRole({
+    startAuthFlow({
       role: 'gov',
       name: 'Dr. A. Sharma',
       designation: 'Deputy Director (Surveillance)',
       agency: 'DGMS / Ministry of Coal',
       badgeText: 'Restricted Officer Access (Tier-1)',
       avatarInitials: 'AS'
-    }, '/command');
+    }, '/command', 'Parichay 2.0 Enterprise SSO (Govt of India)');
   };
 
   const handleOperatorLogin = () => {
-    onSelectRole({
+    startAuthFlow({
       role: 'operator',
       name: 'Eastern Coalfields Ltd (ECL)',
       designation: 'Rajmahal Area Colliery Office',
       agency: 'Eastern Coalfields Limited (CIL)',
       badgeText: 'Regulated Industry Portal (Coal India / Captive)',
       avatarInitials: 'EC'
-    }, '/operator');
+    }, '/operator', 'MeriPehchaan Industry Leaseholder Gateway');
+  };
+
+  const handleOfficerLogin = () => {
+    startAuthFlow({
+      role: 'officer',
+      name: 'Er. Vikram Sengupta',
+      designation: 'Senior Safety Officer (First Class Mgr #9041)',
+      agency: 'DGMS / ECL Rajmahal Field Station',
+      badgeText: 'Colliery Field Safety & CAPA Station',
+      avatarInitials: 'VS',
+      colliery: 'Rajmahal OCP'
+    }, '/officer', 'DGMS Colliery Field Officer Gateway');
+  };
+
+  const handleLabourLogin = () => {
+    startAuthFlow({
+      role: 'labour',
+      name: 'Ramesh Soren',
+      designation: 'Drill & Heavy Equipment Operator',
+      agency: 'Rajmahal Area Colliery Worker Desk',
+      badgeText: 'Labour Mobile App & Offline Geofence',
+      avatarInitials: 'RS',
+      workerId: 'WKR-8812',
+      colliery: 'Rajmahal OCP'
+    }, '/labour', 'e-Shramik Parichay Geofence Auth');
   };
 
   const handleCitizenLogin = () => {
-    onSelectRole({
+    startAuthFlow({
       role: 'citizen',
       name: 'Citizen Observer',
       designation: 'Khanan Prahari Integrated Citizen Desk',
       agency: 'Public Environmental Vigilance',
       badgeText: 'Citizen Public Grievance',
       avatarInitials: 'KP'
-    }, '/citizen');
+    }, '/citizen', 'Jan Parichay / e-Pramaan Mobile OTP');
   };
 
+  const portals = [
+    {
+      id: 'gov',
+      title: 'Government & Regulator',
+      badge: 'DGMS / MoC Command',
+      icon: Satellite,
+      desc: 'Real-time radar satellite surveillance, boundary AI audits & statutory show-cause notices.',
+      persona: 'Dr. A. Sharma · Deputy Director (Surveillance)',
+      accentBorder: 'border-cyan-500/30 hover:border-cyan-400 group-hover:shadow-[0_0_24px_rgba(6,182,212,0.22)]',
+      iconBg: 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30',
+      badgeBg: 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30',
+      btnBg: 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500',
+      handler: handleGovLogin,
+      btnId: 'btn-login-gov'
+    },
+    {
+      id: 'officer',
+      title: 'Mine Officer Portal',
+      badge: 'Safety, CV & Inspections',
+      icon: HardHat,
+      desc: 'Live pit CCTV PPE computer vision, environmental gas telemetry & instant CAPA dispatch.',
+      persona: 'Er. V. Sengupta · Senior Safety Officer (First Class)',
+      accentBorder: 'border-amber-500/30 hover:border-amber-400 group-hover:shadow-[0_0_24px_rgba(245,158,11,0.22)]',
+      iconBg: 'bg-amber-500/10 text-amber-400 border border-amber-500/30',
+      badgeBg: 'bg-amber-500/10 text-amber-300 border border-amber-500/30',
+      btnBg: 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500',
+      handler: handleOfficerLogin,
+      btnId: 'btn-login-officer'
+    },
+    {
+      id: 'labour',
+      title: 'Labour Mobile Portal',
+      badge: 'Shift Attendance & Near-Miss',
+      icon: Smartphone,
+      desc: 'Offline subterranean shift check-in, bilingual voice memos & near-miss hazard reports.',
+      persona: 'Ramesh Soren · Excavator Operator (WKR-8812)',
+      accentBorder: 'border-emerald-500/30 hover:border-emerald-400 group-hover:shadow-[0_0_24px_rgba(16,185,129,0.22)]',
+      iconBg: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30',
+      badgeBg: 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30',
+      btnBg: 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500',
+      handler: handleLabourLogin,
+      btnId: 'btn-login-labour'
+    },
+    {
+      id: 'operator',
+      title: 'Colliery Operator Desk',
+      badge: 'ECL / Compliance & SCN',
+      icon: Building2,
+      desc: 'Statutory SCN clarification replies, DGPS lease boundary overlays & compliance filings.',
+      persona: 'Rajmahal Colliery Office · Eastern Coalfields Ltd',
+      accentBorder: 'border-blue-500/30 hover:border-blue-400 group-hover:shadow-[0_0_24px_rgba(59,130,246,0.22)]',
+      iconBg: 'bg-blue-500/10 text-blue-400 border border-blue-500/30',
+      badgeBg: 'bg-blue-500/10 text-blue-300 border border-blue-500/30',
+      btnBg: 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500',
+      handler: handleOperatorLogin,
+      btnId: 'btn-login-operator'
+    },
+    {
+      id: 'citizen',
+      title: 'Citizen Vigilance',
+      badge: 'Khanan Prahari Complaints',
+      icon: Eye,
+      desc: 'Geotagged community reporting of unauthorized mining, dust pollution & blasting tremors.',
+      persona: 'Citizen Environmental Desk · Aadhaar / Mobile OTP',
+      accentBorder: 'border-teal-500/30 hover:border-teal-400 group-hover:shadow-[0_0_24px_rgba(20,184,166,0.22)]',
+      iconBg: 'bg-teal-500/10 text-teal-400 border border-teal-500/30',
+      badgeBg: 'bg-teal-500/10 text-teal-300 border border-teal-500/30',
+      btnBg: 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500',
+      handler: handleCitizenLogin,
+      btnId: 'btn-login-citizen'
+    }
+  ];
+
   return (
-    <div className={`min-h-screen bg-[#F1F5F9] text-slate-800 flex flex-col justify-between font-sans ${fontSize === 'large' ? 'text-base' : fontSize === 'small' ? 'text-xs' : 'text-sm'}`}>
-      {/* 1. OFFICIAL TOP HEADER BAR */}
-      <header className="bg-white border-b border-[#CBD5E1] shadow-xs">
-        {/* National Tricolor Subtle Bar (Saffron, White, Green thin line) */}
-        <div className="h-1 w-full grid grid-cols-3">
-          <div className="bg-[#FF9933]" />
-          <div className="bg-[#FFFFFF] border-y border-slate-100" />
-          <div className="bg-[#138808]" />
-        </div>
+    <div className="h-screen w-full bg-gradient-to-b from-[#081225] via-[#060D1A] to-[#03060C] text-slate-100 flex flex-col justify-between p-4 md:p-6 overflow-hidden select-none">
+      {/* Subtle National Tricolor Accent Bar */}
+      <div className="fixed top-0 left-0 right-0 h-1 grid grid-cols-3 z-30">
+        <div className="bg-[#FF9933]" />
+        <div className="bg-[#FFFFFF]" />
+        <div className="bg-[#138808]" />
+      </div>
 
-        {/* Top Accessibility & Language Strip */}
-        <div className="bg-[#0B2545] text-slate-200 text-xs px-4 sm:px-8 py-1.5 flex flex-wrap items-center justify-between border-b border-blue-950 gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-300 font-medium tracking-wide">
-              भारत सरकार | Government of India
-            </span>
-            <span className="text-slate-500">|</span>
-            <span className="text-[11px] text-amber-300 font-medium">
-              Single Sign-On (SSO) Portal &bull; MeriPehchaan Integrated
-            </span>
+      {/* 1. TOP HEADER: Compact official emblem with logo, title & subtle NIC trust banner */}
+      <header className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+        {/* Left: Emblem, Title & SIH26024 Tag */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="relative shrink-0">
+            <KhananRakshakLogo className="h-10 w-10 md:h-11 md:w-11" />
           </div>
-
-          <div className="flex items-center gap-4 text-[11px]">
-            <span className="text-slate-300 hover:text-white cursor-pointer transition-colors">
-              Screen Reader Access
-            </span>
-            <span className="text-slate-600">|</span>
-            <div className="flex items-center gap-1.5">
-              <button 
-                onClick={() => setFontSize('small')} 
-                className={`px-1 rounded ${fontSize === 'small' ? 'bg-blue-800 text-white font-bold' : 'text-slate-300 hover:text-white'}`}
-                title="Decrease font size"
-              >
-                A-
-              </button>
-              <button 
-                onClick={() => setFontSize('normal')} 
-                className={`px-1 rounded ${fontSize === 'normal' ? 'bg-blue-800 text-white font-bold' : 'text-slate-300 hover:text-white'}`}
-                title="Default font size"
-              >
-                A
-              </button>
-              <button 
-                onClick={() => setFontSize('large')} 
-                className={`px-1 rounded ${fontSize === 'large' ? 'bg-blue-800 text-white font-bold' : 'text-slate-300 hover:text-white'}`}
-                title="Increase font size"
-              >
-                A+
-              </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-base sm:text-lg font-black tracking-tight text-white truncate">
+                K | AI-Based Smart Governance &amp; Compliance System
+              </h1>
+              <span className="bg-cyan-500/20 text-cyan-300 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border border-cyan-500/40 shrink-0">
+                SIH26024
+              </span>
             </div>
-            <span className="text-slate-600">|</span>
-            <span className="font-semibold text-white">Language: English (EN)</span>
+            <div className="text-xs text-slate-400 font-medium truncate flex items-center gap-2">
+              <span>कोयला मंत्रालय &bull; Ministry of Coal</span>
+              <span className="text-slate-600">&bull;</span>
+              <span>Directorate General of Mines Safety (DGMS)</span>
+            </div>
           </div>
         </div>
 
-        {/* Main Ministry Header Strip */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4 text-left">
-            {/* National Emblem Representation */}
-            <div className="flex flex-col items-center justify-center pr-4 border-r border-slate-300">
-              <div className="text-[#0B2545] font-serif font-bold text-center leading-none">
-                <div className="text-[18px] tracking-tight">सत्यमेव जयते</div>
-                <div className="text-[9px] text-slate-600 tracking-wider font-sans mt-0.5 uppercase">Govt. of India</div>
-              </div>
-            </div>
-
-            {/* Ministry Titles */}
-            <div>
-              <div className="text-xs font-bold text-[#0B2545] uppercase tracking-wider">
-                कोयला मंत्रालय &bull; Ministry of Coal
-              </div>
-              <div className="text-lg sm:text-xl font-bold text-[#0B2545] tracking-tight flex items-center gap-2">
-                <span>CoalGuard AI &bull; National Mine Surveillance &amp; Compliance Portal</span>
-              </div>
-              <div className="text-xs text-slate-500">
-                Directorate General of Mines Safety (DGMS) &bull; Integrated Statutory Gateway
-              </div>
-            </div>
+        {/* Right: Subtle National Informatics Centre / Parichay SSO Trust Banner */}
+        <div className="shrink-0 flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs text-slate-300">
+          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <div className="flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="font-semibold text-slate-200">National Informatics Centre (NIC)</span>
           </div>
-
-          {/* Right Status / Security Badge */}
-          <div className="hidden lg:flex flex-col items-end text-right border-l border-slate-200 pl-5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#0B2545]">
-              <Lock className="w-3.5 h-3.5 text-emerald-700" />
-              <span>National SSO &bull; Parichay 2.0</span>
-            </div>
-            <div className="text-[11px] text-slate-500 mt-0.5">
-              Secure TLS 1.3 &bull; NIC Certificate Authority
-            </div>
-            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-              Portal Ver: 4.2.1-NIC-MOC
-            </div>
-          </div>
+          <span className="text-slate-600 hidden md:inline">|</span>
+          <span className="text-slate-400 hidden md:inline">Parichay 2.0 SSO Verified &bull; TLS 1.3</span>
         </div>
       </header>
 
-      {/* 2. MAIN CENTER CONTENT AREA */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* Notice & Instructions Banner */}
-        <div className="bg-white border border-[#CBD5E1] rounded-sm p-4 shadow-2xs flex items-start gap-3 text-xs text-slate-700">
-          <Info className="w-4 h-4 text-[#0B2545] shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <span className="font-bold text-[#0B2545]">Official Advisory for Authorized Users:</span>
-            <p className="text-slate-600 leading-relaxed">
-              This is a secure Government of India regulatory platform under Section 70 of the Information Technology Act 2000 and Regulation 109 of the Coal Mines Regulations 2017. All satellite analysis, DGPS boundary coordinates, and statutory notice filings are digitally signed and legally binding. Unauthorized access is strictly prohibited and subject to penal action under the Indian Penal Code.
-            </p>
-          </div>
-        </div>
-
-        {/* Section Heading */}
-        <div className="border-b border-[#CBD5E1] pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      {/* 2. 5-PORTAL CARD GRID (Single Screen Fit, Zero Scroll) */}
+      <main className="flex-1 flex flex-col justify-center my-auto py-2 min-h-0">
+        <div className="mb-2.5 text-center md:text-left flex items-center justify-between">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-[#0B2545]">
-              Select Authorized Access Tier / Single Sign-On Gateway
+            <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">
+              Select Authorized Access Tier
             </h2>
-            <p className="text-xs text-slate-500">
-              Please choose your designated organizational portal to proceed with digital identity verification.
+            <p className="text-xs text-slate-400">
+              Role-governed single sign-on with cryptographic credentials and digital identity verification.
             </p>
           </div>
-          <span className="text-[11px] text-slate-500 bg-slate-200/80 px-2.5 py-1 rounded-sm font-mono self-start sm:self-auto border border-slate-300">
-            Node: NIC-DEL-CLUST-04
+          <span className="hidden lg:inline-block text-[11px] text-slate-400 font-mono bg-slate-900/80 border border-slate-800 px-2.5 py-1 rounded">
+            Node: NIC-DEL-CLUST-04 &bull; MeghRaj Cloud
           </span>
         </div>
 
-        {/* 3. AUTHENTIC 3-TIER ENTERPRISE LOGIN GRID (Horizontal Clean Cards) */}
-        <div className="space-y-4">
-          {/* ========================================================================= */}
-          {/* PANEL 1: DIRECTORATE OF MINES SAFETY & SURVEILLANCE (DGMS / MoC)          */}
-          {/* ========================================================================= */}
-          <div className="bg-white border border-[#CBD5E1] rounded-sm p-5 sm:p-6 shadow-2xs hover:border-[#0B2545] transition-all">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-              {/* Left Column: Department Info, Scope & Identity */}
-              <div className="space-y-2 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="w-8 h-8 rounded-sm bg-[#0B2545] text-white flex items-center justify-center shrink-0">
-                    <Shield className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-[#0B2545] leading-tight">
-                      Directorate of Mines Safety &amp; Surveillance (DGMS / MoC)
-                    </h3>
-                    <div className="text-xs text-slate-500">
-                      Ministry of Coal &bull; Central Mine Vigilance Command
+        {/* 5-Column Responsive Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 lg:gap-3.5 h-[62vh] max-h-[460px] min-h-[320px]">
+          {portals.map((portal) => {
+            const Icon = portal.icon;
+            return (
+              <div
+                key={portal.id}
+                className={`group relative bg-[#0C192E]/90 hover:bg-[#0F213E] border rounded-xl p-4 flex flex-col justify-between transition-all duration-300 shadow-lg ${portal.accentBorder}`}
+              >
+                {/* Top: Icon & Badge */}
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${portal.iconBg}`}>
+                      <Icon className="w-4 h-4" />
                     </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider truncate max-w-[135px] ${portal.badgeBg}`}>
+                      {portal.badge}
+                    </span>
                   </div>
-                  <span className="ml-auto lg:ml-2 text-[11px] font-bold text-blue-900 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-sm">
-                    Restricted Officer Access (Tier-1)
-                  </span>
+
+                  {/* Title */}
+                  <h3 className="text-sm lg:text-base font-bold text-white tracking-tight leading-snug group-hover:text-cyan-200 transition-colors">
+                    {portal.title}
+                  </h3>
+
+                  {/* 1-Line Description */}
+                  <p className="text-xs text-slate-400 leading-relaxed mt-1.5 line-clamp-3">
+                    {portal.desc}
+                  </p>
                 </div>
 
-                <p className="text-xs text-slate-600 leading-relaxed pt-1">
-                  Geospatial radar, statutory notice issuance, and multi-source evidence auditing.
-                </p>
+                {/* Bottom: Persona preview & CTA button */}
+                <div className="pt-2 border-t border-slate-800/70 space-y-2.5">
+                  <div className="text-[10px] text-slate-400 bg-slate-900/80 border border-slate-800/90 rounded px-2 py-1 truncate">
+                    <span className="text-slate-500 font-mono mr-1">Auth:</span>
+                    <span className="text-slate-300 font-medium">{portal.persona}</span>
+                  </div>
 
-                {/* Authorized Officer Identity Pill */}
-                <div className="bg-slate-50 border border-slate-200 rounded-sm px-3 py-2 text-xs flex items-center gap-2.5 max-w-md">
-                  <div className="w-6 h-6 rounded-sm bg-[#0B2545] text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                    AS
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-bold text-[#0B2545] truncate">
-                      Dr. A. Sharma &bull; Deputy Director (Surveillance)
-                    </div>
-                    <div className="text-[10px] text-slate-500 truncate">
-                      DGMS Headquarters, Dhanbad &bull; Ministry Clearance ID: MOC-DIR-8814
-                    </div>
-                  </div>
+                  <button
+                    id={portal.btnId}
+                    onClick={portal.handler}
+                    className={`w-full py-2.5 px-3 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer ${portal.btnBg}`}
+                  >
+                    <span>Access Portal</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                  </button>
                 </div>
               </div>
-
-              {/* Right Column: Action Button & Protocols */}
-              <div className="lg:w-80 shrink-0 lg:border-l lg:border-slate-200 lg:pl-6 flex flex-col justify-center space-y-2.5">
-                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                  <KeyRound className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Protocol: MeriPehchaan (Parichay SSO / e-Gov)</span>
-                </div>
-                <button
-                  id="btn-login-gov"
-                  onClick={handleGovLogin}
-                  className="w-full bg-[#0B2545] hover:bg-[#133A6B] text-white font-semibold text-xs py-3 px-4 rounded-sm transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs border border-[#0B2545]"
-                >
-                  <span>Authenticate via Parichay / MeriPehchaan</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                <div className="text-[10px] text-slate-400 text-center">
-                  Requires 2FA / Gov Authenticator Token
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ========================================================================= */}
-          {/* PANEL 2: COLLIERY MANAGEMENT & LEASE OPERATORS                            */}
-          {/* ========================================================================= */}
-          <div className="bg-white border border-[#CBD5E1] rounded-sm p-5 sm:p-6 shadow-2xs hover:border-[#0B2545] transition-all">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-              {/* Left Column: Department Info, Scope & Identity */}
-              <div className="space-y-2 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="w-8 h-8 rounded-sm bg-slate-700 text-white flex items-center justify-center shrink-0">
-                    <Building2 className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-[#0B2545] leading-tight">
-                      Colliery Management &amp; Lease Operators
-                    </h3>
-                    <div className="text-xs text-slate-500">
-                      Eastern Coalfields Limited / Coal India Subsidiaries &amp; Captive Blocks
-                    </div>
-                  </div>
-                  <span className="ml-auto lg:ml-2 text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-sm">
-                    Regulated Industry Portal (Coal India / Captive)
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-600 leading-relaxed pt-1">
-                  Statutory show-cause notice desk, DGPS survey uploads, and clearance compliance logs.
-                </p>
-
-                {/* Authorized Operator Identity Pill */}
-                <div className="bg-slate-50 border border-slate-200 rounded-sm px-3 py-2 text-xs flex items-center gap-2.5 max-w-md">
-                  <div className="w-6 h-6 rounded-sm bg-amber-800 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                    ECL
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-bold text-[#0B2545] truncate">
-                      Eastern Coalfields Ltd (ECL) &bull; Rajmahal Area Colliery Office
-                    </div>
-                    <div className="text-[10px] text-slate-500 truncate">
-                      Agent &amp; Chief Mining Surveyor Desk &bull; CIL ID: ECL-RJM-OP-04
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column: Action Button & Protocols */}
-              <div className="lg:w-80 shrink-0 lg:border-l lg:border-slate-200 lg:pl-6 flex flex-col justify-center space-y-2.5">
-                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                  <FileCheck className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Protocol: Class-3 Digital Signature Certificate (DSC)</span>
-                </div>
-                <button
-                  id="btn-login-operator"
-                  onClick={handleOperatorLogin}
-                  className="w-full bg-white hover:bg-slate-50 text-[#0B2545] font-semibold text-xs py-3 px-4 rounded-sm transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs border-2 border-[#0B2545]"
-                >
-                  <span>Operator Login (Digital Signature / DSC)</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                <div className="text-[10px] text-slate-400 text-center">
-                  USB Token or e-Sign with e-Mudhra / NSDL
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ========================================================================= */}
-          {/* PANEL 3: PUBLIC ENVIRONMENTAL VIGILANCE (KHANAN PRAHARI INTEGRATED)        */}
-          {/* ========================================================================= */}
-          <div className="bg-white border border-[#CBD5E1] rounded-sm p-5 sm:p-6 shadow-2xs hover:border-emerald-700 transition-all">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-              {/* Left Column: Department Info, Scope & Identity */}
-              <div className="space-y-2 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="w-8 h-8 rounded-sm bg-emerald-700 text-white flex items-center justify-center shrink-0">
-                    <Users className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-[#0B2545] leading-tight">
-                      Public Environmental Vigilance (Khanan Prahari Integrated)
-                    </h3>
-                    <div className="text-xs text-slate-500">
-                      Citizen Grievance &amp; Community Geotagged Observation Desk
-                    </div>
-                  </div>
-                  <span className="ml-auto lg:ml-2 text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-sm">
-                    Citizen Public Grievance
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-600 leading-relaxed pt-1">
-                  Lodge geotagged observations regarding boundary encroachment, dust dispersion, or blasting.
-                </p>
-
-                {/* Citizen Identity Pill */}
-                <div className="bg-slate-50 border border-slate-200 rounded-sm px-3 py-2 text-xs flex items-center gap-2.5 max-w-md">
-                  <div className="w-6 h-6 rounded-sm bg-emerald-800 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                    KP
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-bold text-[#0B2545] truncate">
-                      Citizen Environmental Desk &bull; Khanan Prahari Network
-                    </div>
-                    <div className="text-[10px] text-slate-500 truncate">
-                      Open Citizen Channel &bull; Aadhaar / Mobile OTP Verified
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column: Action Button & Protocols */}
-              <div className="lg:w-80 shrink-0 lg:border-l lg:border-slate-200 lg:pl-6 flex flex-col justify-center space-y-2.5">
-                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                  <Smartphone className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Protocol: e-Pramaan / Jan Parichay Mobile OTP</span>
-                </div>
-                <button
-                  id="btn-login-citizen"
-                  onClick={handleCitizenLogin}
-                  className="w-full bg-[#138808] hover:bg-[#0f6b06] text-white font-semibold text-xs py-3 px-4 rounded-sm transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs border border-[#138808]"
-                >
-                  <span>Proceed with Mobile OTP / e-Pramaan</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                <div className="text-[10px] text-slate-400 text-center">
-                  Instant Access &bull; No Prior Registration Needed
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Informational Verification Note */}
-        <div className="p-4 bg-slate-100 border border-slate-200 rounded-sm text-xs text-slate-600 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>
-              All authentications are logged with IP, timestamp, and digital identity for regulatory audit under CCoM / DGMS.
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-[11px] text-slate-500 shrink-0">
-            <span className="hover:underline cursor-pointer">Terms of Service</span>
-            <span>&bull;</span>
-            <span className="hover:underline cursor-pointer">Privacy Policy</span>
-            <span>&bull;</span>
-            <span className="hover:underline cursor-pointer">Helpdesk: 1800-11-2026</span>
-          </div>
+            );
+          })}
         </div>
       </main>
 
-      {/* 4. OFFICIAL FOOTER */}
-      <footer className="bg-[#0B2545] text-slate-300 text-xs border-t-2 border-[#138808] mt-12">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left">
-            <div className="space-y-1">
-              <p className="font-semibold text-white">
-                Designed and Developed for Ministry of Coal &bull; Hosted by National Informatics Centre (NIC)
-              </p>
-              <p className="text-slate-400 text-[11px]">
-                Content Owned and Maintained by Directorate General of Mines Surveillance.
-              </p>
+      {/* 3. MINIMALIST SINGLE-LINE COMPACT FOOTER */}
+      <footer className="shrink-0 pt-2.5 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-400">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <span className="text-slate-300 font-medium">
+            Ministry of Coal &bull; Directorate General of Mines Safety (DGMS) &bull; SIH26024 Compliance Architecture
+          </span>
+        </div>
+        <div className="flex items-center gap-3 text-slate-500 text-[10px]">
+          <span>GIGW 2.0 &bull; STQC Audited</span>
+          <span>&bull;</span>
+          <span>&copy; {new Date().getFullYear()} Govt. of India</span>
+        </div>
+      </footer>
+
+      {/* Parichay / MeriPehchaan Auth Splash Screen Modal */}
+      {splashData && (
+        <div className="fixed inset-0 z-50 bg-[#06101E]/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white border-2 border-[#0B2545] rounded-xl shadow-2xl max-w-md w-full overflow-hidden text-center animate-in zoom-in-95 duration-200">
+            {/* Top Tricolor Strip */}
+            <div className="h-1.5 w-full grid grid-cols-3">
+              <div className="bg-[#FF9933]" />
+              <div className="bg-[#FFFFFF]" />
+              <div className="bg-[#138808]" />
             </div>
 
-            <div className="flex items-center gap-3 text-[11px] text-slate-400">
-              <div className="bg-blue-950 border border-blue-900 px-3 py-1.5 rounded-sm text-center">
-                <div className="font-bold text-white text-[10px]">NIC CLOUD</div>
-                <div className="text-[9px] text-slate-400">MeghRaj Certified</div>
-              </div>
-              <div className="bg-blue-950 border border-blue-900 px-3 py-1.5 rounded-sm text-center">
-                <div className="font-bold text-white text-[10px]">STQC AUDITED</div>
-                <div className="text-[9px] text-slate-400">GIGW 2.0 Compliant</div>
-              </div>
-            </div>
-          </div>
+            <div className="p-6 sm:p-8 space-y-5">
+              {/* Central Badge of the Parichay / MeriPehchaan Auth Splash Screen */}
+              <div className="flex flex-col items-center justify-center">
+                <div className="relative inline-flex items-center justify-center p-1 rounded-full bg-gradient-to-tr from-blue-600 via-cyan-400 to-emerald-400 shadow-[0_0_24px_rgba(6,182,212,0.4)]">
+                  <div className="bg-[#0A192F] p-1 rounded-full flex items-center justify-center">
+                    <KhananRakshakLogo className="h-16 w-16" />
+                  </div>
+                </div>
 
-          <div className="pt-3 border-t border-blue-900/60 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] text-slate-400">
-            <div>
-              &copy; {new Date().getFullYear()} Ministry of Coal, Government of India. All Rights Reserved.
-            </div>
-            <div className="flex items-center gap-4">
-              <span>Last Updated: 02 Sep 2026</span>
-              <span>&bull;</span>
-              <span>Best viewed in Chrome 90+, Firefox 88+, Edge 90+ (1366x768 or higher)</span>
+                <div className="mt-3">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 block">
+                    National Single Sign-On (SSO)
+                  </span>
+                  <h3 className="text-xl font-black text-[#0B2545] tracking-tight">
+                    मेरी पहचान &bull; MeriPehchaan
+                  </h3>
+                  <div className="text-xs font-semibold text-blue-700">
+                    Parichay 2.0 Identity Gateway &bull; NIC
+                  </div>
+                </div>
+              </div>
+
+              {/* Target Platform Banner */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-left space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold text-slate-500">Accessing Platform</span>
+                  <span className="text-[10px] font-mono font-bold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
+                    SIH26024
+                  </span>
+                </div>
+                <div className="font-bold text-sm text-slate-900">
+                  KhananRakshak AI (K-AI)
+                </div>
+                <div className="text-[11px] text-slate-600 leading-snug">
+                  AI-Powered Smart Governance &amp; Satellite Surveillance System for Coal Mines
+                </div>
+              </div>
+
+              {/* Active Officer / Identity Card */}
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg text-left text-xs space-y-1">
+                <div className="text-[10px] uppercase font-bold text-blue-900">
+                  Verified Identity Profile
+                </div>
+                <div className="font-bold text-slate-900 text-sm">
+                  {splashData.user.name}
+                </div>
+                <div className="text-slate-600 text-[11px]">
+                  {splashData.user.designation}
+                </div>
+                <div className="text-[10px] font-mono text-slate-500 truncate">
+                  Protocol: {splashData.protocol}
+                </div>
+              </div>
+
+              {/* Dynamic Status Progression Bar */}
+              <div className="space-y-2 text-left">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-600 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-cyan-500 animate-ping"></span>
+                    <span className="font-medium text-slate-700">{splashData.step}</span>
+                  </span>
+                  <span className="font-mono text-slate-400 text-[10px]">TLS 1.3</span>
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 animate-pulse rounded-full w-full" />
+                </div>
+              </div>
+
+              {/* Immediate Proceed Action */}
+              <button
+                onClick={() => onSelectRole(splashData.user, splashData.route)}
+                className="w-full py-2.5 bg-[#0B2545] hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Authorize &amp; Launch Console</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>
-      </footer>
+      )}
     </div>
   );
 }

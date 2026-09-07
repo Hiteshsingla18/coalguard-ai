@@ -17,11 +17,14 @@ import {
   Layers, 
   Download,
   Calendar,
-  FileCheck
+  FileCheck,
+  Users
 } from 'lucide-react';
-import { AuthUser, MineRecord, ViolationStatus } from '../types';
+import { AuthUser, MineRecord, ViolationStatus, UserRole, WorkforceAttendanceRecord } from '../types';
 import RegulatoryCopilot from './RegulatoryCopilot';
 import SurveillanceMap from './SurveillanceMap';
+import GlobalHeaderControls from './GlobalHeaderControls';
+import WorkforceAttendanceRoster from './WorkforceAttendanceRoster';
 
 interface OperatorPortalProps {
   currentUser: AuthUser;
@@ -31,9 +34,16 @@ interface OperatorPortalProps {
   onSignOut: () => void;
   onOpenDossierModal: () => void;
   triggerToast: (msg: string) => void;
+  isOnline?: boolean;
+  isSyncing?: boolean;
+  pendingSyncCount?: number;
+  onToggleNetwork?: () => void;
+  onOpenSyncModal?: () => void;
+  onSwitchPortal?: (role: UserRole, route: string) => void;
+  attendanceRoster?: WorkforceAttendanceRecord[];
 }
 
-type OperatorNavTab = 'notice_response' | 'lease_map' | 'compliance_history';
+type OperatorNavTab = 'notice_response' | 'lease_map' | 'compliance_history' | 'workforce_attendance';
 
 export default function OperatorPortal({
   currentUser,
@@ -42,7 +52,14 @@ export default function OperatorPortal({
   onSubmitFormalResponse,
   onSignOut,
   onOpenDossierModal,
-  triggerToast
+  triggerToast,
+  isOnline = true,
+  isSyncing = false,
+  pendingSyncCount = 0,
+  onToggleNetwork = () => {},
+  onOpenSyncModal = () => {},
+  onSwitchPortal = () => {},
+  attendanceRoster
 }: OperatorPortalProps) {
   const [activeTab, setActiveTab] = useState<OperatorNavTab>('notice_response');
   const [isCopilotOpen, setIsCopilotOpen] = useState<boolean>(false);
@@ -84,18 +101,27 @@ export default function OperatorPortal({
         {/* Branding & Active Profile */}
         <div className="p-4 border-b border-slate-800/80 shrink-0 space-y-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-amber-600 flex items-center justify-center text-white shadow-md font-black text-sm shrink-0">
-              <Building2 className="w-5 h-5 text-white" />
+            <div className="relative inline-flex items-center justify-center shrink-0">
+              <img 
+                src="/src/assets/logo.png" 
+                alt="K Logo" 
+                className="h-9 w-9 object-contain rounded-full" 
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.parentElement?.classList.add('w-9', 'h-9', 'rounded-full', 'bg-[#0A192F]', 'border-2', 'border-cyan-400', 'flex', 'items-center', 'justify-center', 'text-cyan-300', 'font-mono', 'font-black', 'text-sm', 'shadow-[0_0_12px_rgba(6,182,212,0.5)]');
+                  e.currentTarget.parentElement?.appendChild(document.createTextNode('K'));
+                }}
+              />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-base tracking-tight text-white truncate">CoalGuard AI</span>
+                <span className="font-extrabold text-base tracking-tight text-white truncate">KhananRakshak AI</span>
                 <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-500/30 font-mono">
-                  ECL
+                  K-AI
                 </span>
               </div>
               <div className="text-[11px] text-slate-400 leading-tight truncate mt-0.5">
-                Colliery Operator Desk &bull; ECL
+                Operator Desk &bull; SIH26024
               </div>
             </div>
           </div>
@@ -170,6 +196,25 @@ export default function OperatorPortal({
             <FileCheck className={`w-4 h-4 ${activeTab === 'compliance_history' ? 'text-white' : 'text-slate-400'}`} />
             <span className="truncate">Statutory Clearances Log</span>
           </button>
+
+          {/* 4. Labour Attendance & Workforce Composition */}
+          <button
+            id="operator-nav-workforce"
+            onClick={() => setActiveTab('workforce_attendance')}
+            className={`w-full px-3 py-2.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
+              activeTab === 'workforce_attendance'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <Users className={`w-4 h-4 ${activeTab === 'workforce_attendance' ? 'text-white' : 'text-slate-400'}`} />
+              <span className="truncate">Workforce &amp; Attendance</span>
+            </div>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded font-mono shrink-0 bg-amber-900/60 text-amber-200 border border-amber-600/40">
+              412
+            </span>
+          </button>
         </div>
 
         {/* Bottom Sidebar: AI Regulatory Copilot & Sign Out */}
@@ -211,13 +256,27 @@ export default function OperatorPortal({
         {/* TOP STATUS HEADER */}
         <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shrink-0 shadow-2xs">
           <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-2 min-w-0">
+            {/* Breadcrumb & K Logo in Header */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="relative inline-flex items-center justify-center shrink-0">
+                <img 
+                  src="/src/assets/logo.png" 
+                  alt="K Logo" 
+                  className="h-7 w-7 object-contain rounded-full" 
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.parentElement?.classList.add('w-7', 'h-7', 'rounded-full', 'bg-[#0A192F]', 'border', 'border-cyan-400', 'flex', 'items-center', 'justify-center', 'text-cyan-300', 'font-mono', 'font-black', 'text-xs');
+                    e.currentTarget.parentElement?.appendChild(document.createTextNode('K'));
+                  }}
+                />
+              </div>
+              <span className="font-bold text-sm text-slate-900 truncate">KhananRakshak AI</span>
+              <span className="text-slate-300">/</span>
               <span className="text-xs font-bold text-amber-700 uppercase tracking-wider truncate">
                 Colliery Operator Desk
               </span>
               <span className="text-slate-300">/</span>
-              <span className="font-bold text-sm text-slate-900 truncate">
+              <span className="font-semibold text-xs text-slate-700 truncate hidden md:inline">
                 {activeTab === 'notice_response' && 'Show-Cause Notice SCN-2026-082 Clarification'}
                 {activeTab === 'lease_map' && 'Rajmahal OCP Lease Boundary & Sentinel Radar'}
                 {activeTab === 'compliance_history' && 'Statutory Clearances & Audit History'}
@@ -246,16 +305,19 @@ export default function OperatorPortal({
                 <span>Ministry Dossier</span>
               </button>
 
-              {/* Prominent Switch Role / Sign Out Action */}
-              <button
-                id="btn-switch-role"
-                onClick={onSignOut}
-                className="text-xs bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer border border-slate-700 hover:border-amber-400 group"
-                title="Return to National Login Gateway"
-              >
-                <LogOut className="w-3.5 h-3.5 text-slate-300 group-hover:text-amber-400 transition-colors" />
-                <span className="whitespace-nowrap">Switch Role / Sign Out</span>
-              </button>
+              {/* Global Offline-First Simulator & Universal 5-Role Switcher */}
+              <GlobalHeaderControls
+                currentUser={currentUser}
+                currentPath="/operator"
+                isOnline={isOnline}
+                isSyncing={isSyncing}
+                pendingSyncCount={pendingSyncCount}
+                onToggleNetwork={onToggleNetwork}
+                onOpenSyncModal={onOpenSyncModal}
+                onSwitchPortal={onSwitchPortal}
+                onSignOut={onSignOut}
+                theme="light"
+              />
             </div>
           </div>
         </header>
@@ -598,6 +660,39 @@ export default function OperatorPortal({
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* 4. LABOUR ATTENDANCE & WORKFORCE COMPOSITION */}
+          {activeTab === 'workforce_attendance' && (
+            <div className="p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-xl font-black text-slate-900 tracking-tight">
+                      Colliery Labour Attendance &amp; Contractor Workforce Composition
+                    </h1>
+                    <span className="bg-amber-100 text-amber-900 text-xs font-bold px-2 py-0.5 rounded border border-amber-300">
+                      ECL Rajmahal Area
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Statutory oversight of direct Coal India Limited roll personnel and 4 third-party contractor agencies under Mines Act 1952.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono bg-slate-100 border border-slate-200 px-2.5 py-1 rounded text-slate-700">
+                    Mines Act 1952 &bull; Sec 48 Muster Roll
+                  </span>
+                </div>
+              </div>
+
+              <WorkforceAttendanceRoster
+                roster={attendanceRoster}
+                triggerToast={triggerToast}
+                roleContext="operator"
+              />
             </div>
           )}
         </main>

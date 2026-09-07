@@ -13,7 +13,8 @@ import {
   ChevronUp,
   ChevronDown,
   Building2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Users
 } from 'lucide-react';
 
 interface MineExplorerProps {
@@ -31,6 +32,7 @@ export default function MineExplorer({
 }: MineExplorerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedState, setSelectedState] = useState('All States');
+  const [selectedSubsidiary, setSelectedSubsidiary] = useState('All Subsidiaries');
   const [selectedStatus, setSelectedStatus] = useState('All Statuses');
   const [sortField, setSortField] = useState<keyof MineRecord>('complianceScore');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -43,12 +45,19 @@ export default function MineExplorer({
           mine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           mine.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
           mine.operator.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          mine.coalfield.toLowerCase().includes(searchTerm.toLowerCase());
+          mine.subsidiary.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          mine.coalfield.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          mine.basin.toLowerCase().includes(searchTerm.toLowerCase());
 
         const matchesState = selectedState === 'All States' || mine.state === selectedState;
-        const matchesStatus = selectedStatus === 'All Statuses' || mine.status === selectedStatus;
+        const matchesSubsidiary = selectedSubsidiary === 'All Subsidiaries' || mine.subsidiary === selectedSubsidiary;
+        
+        let matchesStatus = true;
+        if (selectedStatus === 'critical') matchesStatus = mine.complianceScore < 65 || mine.status === 'critical';
+        else if (selectedStatus === 'monitor') matchesStatus = mine.complianceScore >= 65 && mine.complianceScore < 80;
+        else if (selectedStatus === 'compliant') matchesStatus = mine.complianceScore >= 80;
 
-        return matchesSearch && matchesState && matchesStatus;
+        return matchesSearch && matchesState && matchesSubsidiary && matchesStatus;
       })
       .sort((a, b) => {
         const valA = a[sortField];
@@ -60,7 +69,7 @@ export default function MineExplorer({
           ? String(valA).localeCompare(String(valB))
           : String(valB).localeCompare(String(valA));
       });
-  }, [mines, searchTerm, selectedState, selectedStatus, sortField, sortDirection]);
+  }, [mines, searchTerm, selectedState, selectedSubsidiary, selectedStatus, sortField, sortDirection]);
 
   const handleSort = (field: keyof MineRecord) => {
     if (sortField === field) {
@@ -72,22 +81,26 @@ export default function MineExplorer({
   };
 
   const handleExportCSV = () => {
-    const headers = ['ID', 'Name', 'Operator', 'State', 'Status', 'Compliance Score', 'Capacity MTPA', 'Active Reports'];
+    const headers = ['ID', 'Name', 'Subsidiary', 'Operator', 'State', 'Basin', 'Status', 'Compliance Score', 'Total Workforce', 'Permanent', 'Contractual', 'Capacity MTPA'];
     const rows = filteredMines.map(m => [
       m.id,
       `"${m.name}"`,
+      m.subsidiary,
       `"${m.operator}"`,
       m.state,
+      `"${m.basin}"`,
       m.status,
       m.complianceScore,
-      m.productionCapacityMTPA,
-      m.activeReports
+      m.workforceSplit?.total || m.activeWorkforce || 0,
+      m.workforceSplit?.permanent || 0,
+      m.workforceSplit?.contractual || 0,
+      m.productionCapacityMTPA
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `National_Mine_Directory_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `National_25_Mine_Directory_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -98,46 +111,44 @@ export default function MineExplorer({
       {/* Explorer Header & Breadcrumb */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 rounded-lg p-5 shadow-2xs">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-[#1E40AF] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-              National Coalfield Registry
-            </span>
-            <span className="text-xs text-slate-400">&bull;</span>
-            <span className="text-xs text-slate-500 font-mono">DGMS Reg. Audit 2026</span>
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium mb-1">
+            <span>DGMS National Coal Portal</span>
+            <span>&bull;</span>
+            <span className="text-blue-700 font-semibold">Comprehensive Geospatial Registry</span>
           </div>
-          <h1 className="text-xl font-bold text-slate-900">Mine Explorer & Statutory Lease Directory</h1>
+          <h2 className="text-xl font-bold text-slate-900">National 25-Mine Coalfield Directory</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Real-time multi-spectral satellite surveillance and compliance directory across surveyed open cast and underground coal assets.
+            Real-time compliance surveillance, workforce strength, and satellite audit tracking across India's 7 major coal-producing states.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2">
           <button
             onClick={handleExportCSV}
-            className="px-3.5 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-md text-xs font-semibold flex items-center gap-2 transition-colors shadow-2xs cursor-pointer"
+            className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span>Export Directory (CSV)</span>
+            <Download className="w-3.5 h-3.5 text-slate-600" />
+            <span>Export Registry (.CSV)</span>
           </button>
           <button
             onClick={onNavigateToOverview}
-            className="px-3.5 py-2 bg-[#1E40AF] hover:bg-blue-800 text-white rounded-md text-xs font-semibold flex items-center gap-2 transition-colors shadow-sm cursor-pointer"
+            className="px-3.5 py-2 bg-[#0A192F] hover:bg-slate-800 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
           >
-            <MapPin className="w-4 h-4" />
-            <span>View Geospatial Radar</span>
+            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+            <span>View Nationwide Map</span>
           </button>
         </div>
       </div>
 
       {/* Filter & Search Bar */}
       <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-3">
-        <div className="relative w-full md:w-80">
+        <div className="relative w-full md:w-72">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search mine, ID, operator, or coalfield..."
+            placeholder="Search mine, ID, subsidiary, basin..."
             className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-md bg-white text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -151,29 +162,47 @@ export default function MineExplorer({
           <select
             value={selectedState}
             onChange={(e) => setSelectedState(e.target.value)}
-            className="px-2.5 py-1.5 text-xs border border-slate-300 rounded bg-white text-slate-800 focus:ring-1 focus:ring-blue-500 outline-hidden"
+            className="px-2.5 py-1.5 text-xs border border-slate-300 rounded bg-white text-slate-800 focus:ring-1 focus:ring-blue-500 outline-hidden font-medium"
           >
-            <option value="All States">All States ({mines.length})</option>
-            <option value="Jharkhand">Jharkhand</option>
-            <option value="West Bengal">West Bengal</option>
-            <option value="Chhattisgarh">Chhattisgarh</option>
-            <option value="Odisha">Odisha</option>
-            <option value="Madhya Pradesh">Madhya Pradesh</option>
+            <option value="All States">All States (7)</option>
+            <option value="Jharkhand">Jharkhand (5)</option>
+            <option value="Chhattisgarh">Chhattisgarh (5)</option>
+            <option value="Odisha">Odisha (4)</option>
+            <option value="West Bengal">West Bengal (3)</option>
+            <option value="Madhya Pradesh">Madhya Pradesh (3)</option>
+            <option value="Maharashtra">Maharashtra (3)</option>
+            <option value="Telangana">Telangana (2)</option>
+          </select>
+
+          <select
+            value={selectedSubsidiary}
+            onChange={(e) => setSelectedSubsidiary(e.target.value)}
+            className="px-2.5 py-1.5 text-xs border border-slate-300 rounded bg-white text-slate-800 focus:ring-1 focus:ring-blue-500 outline-hidden font-medium"
+          >
+            <option value="All Subsidiaries">All Subsidiaries (8)</option>
+            <option value="ECL">ECL</option>
+            <option value="BCCL">BCCL</option>
+            <option value="CCL">CCL</option>
+            <option value="SECL">SECL</option>
+            <option value="MCL">MCL</option>
+            <option value="NCL">NCL</option>
+            <option value="WCL">WCL</option>
+            <option value="SCCL">SCCL</option>
           </select>
 
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-2.5 py-1.5 text-xs border border-slate-300 rounded bg-white text-slate-800 focus:ring-1 focus:ring-blue-500 outline-hidden"
+            className="px-2.5 py-1.5 text-xs border border-slate-300 rounded bg-white text-slate-800 focus:ring-1 focus:ring-blue-500 outline-hidden font-medium"
           >
             <option value="All Statuses">All Risk Tiers</option>
-            <option value="critical">Critical Encroachment</option>
-            <option value="monitor">Advisory Monitoring</option>
-            <option value="compliant">Compliant</option>
+            <option value="critical">Critical Breach (&lt;65%)</option>
+            <option value="monitor">Needs Monitoring (65-79%)</option>
+            <option value="compliant">Compliant (&ge;80%)</option>
           </select>
 
           <span className="text-xs text-slate-500 font-mono ml-auto md:ml-2">
-            Showing <strong className="text-slate-800">{filteredMines.length}</strong> of {mines.length} records
+            Showing <strong className="text-slate-800">{filteredMines.length}</strong> of {mines.length}
           </span>
         </div>
       </div>
@@ -186,17 +215,18 @@ export default function MineExplorer({
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
                 <th className="py-3 px-4 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('id')}>
                   <div className="flex items-center gap-1">
-                    <span>Mine Identifier</span>
+                    <span>Mine ID</span>
                     {sortField === 'id' && (sortDirection === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
                   </div>
                 </th>
                 <th className="py-3 px-4 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('name')}>
                   <div className="flex items-center gap-1">
-                    <span>Colliery / Block Name</span>
+                    <span>Colliery &amp; Subsidiary</span>
                     {sortField === 'name' && (sortDirection === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
                   </div>
                 </th>
-                <th className="py-3 px-4">Operator & State</th>
+                <th className="py-3 px-4">Basin &amp; State</th>
+                <th className="py-3 px-4">Workforce Strength</th>
                 <th className="py-3 px-4 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('status')}>
                   <div className="flex items-center gap-1">
                     <span>Status</span>
@@ -205,18 +235,18 @@ export default function MineExplorer({
                 </th>
                 <th className="py-3 px-4 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('complianceScore')}>
                   <div className="flex items-center gap-1">
-                    <span>Compliance Rating</span>
+                    <span>Compliance</span>
                     {sortField === 'complianceScore' && (sortDirection === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
                   </div>
                 </th>
-                <th className="py-3 px-4">Capacity / Reports</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredMines.map((mine) => {
-                const isCritical = mine.status === 'critical';
-                const isMonitor = mine.status === 'monitor';
+                const isCritical = mine.complianceScore < 65 || mine.status === 'critical';
+                const isMonitor = !isCritical && mine.complianceScore >= 65 && mine.complianceScore < 80;
+                const totalWorkforce = mine.workforceSplit?.total || mine.activeWorkforce || 0;
 
                 return (
                   <tr 
@@ -227,7 +257,12 @@ export default function MineExplorer({
                       {mine.id}
                     </td>
                     <td className="py-3 px-4">
-                      <div className="font-bold text-slate-900">{mine.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900">{mine.name}</span>
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                          {mine.subsidiary}
+                        </span>
+                      </div>
                       <div className="text-slate-500 text-[11px] flex items-center gap-1 mt-0.5">
                         <span>{mine.coalfield}</span>
                         {mine.unauthorizedAreaHa && (
@@ -238,10 +273,19 @@ export default function MineExplorer({
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <div className="text-slate-800 font-medium">{mine.operator}</div>
+                      <div className="text-slate-800 font-medium">{mine.basin}</div>
                       <div className="text-slate-500 text-[11px] flex items-center gap-1">
                         <MapPin className="w-3 h-3 text-slate-400" />
                         <span>{mine.region}, {mine.state}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <div className="font-bold text-slate-900 flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5 text-slate-500" />
+                        <span>{totalWorkforce.toLocaleString()} On-Duty</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-mono">
+                        {mine.workforceSplit?.permanent || 0} Reg / {mine.workforceSplit?.contractual || 0} Cont
                       </div>
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">
@@ -254,7 +298,7 @@ export default function MineExplorer({
                           isCritical ? 'bg-red-600 animate-pulse' :
                           isMonitor ? 'bg-amber-600' : 'bg-emerald-600'
                         }`}></span>
-                        {mine.status}
+                        {isCritical ? 'Critical Breach' : isMonitor ? 'Needs Monitor' : 'Compliant'}
                       </span>
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">
@@ -262,23 +306,19 @@ export default function MineExplorer({
                         <div className="w-16 bg-slate-200 rounded-full h-2 overflow-hidden">
                           <div
                             className={`h-full rounded-full ${
-                              mine.complianceScore < 80 ? 'bg-red-600' :
-                              mine.complianceScore < 90 ? 'bg-amber-500' : 'bg-emerald-500'
+                              mine.complianceScore < 65 ? 'bg-red-600' :
+                              mine.complianceScore < 80 ? 'bg-amber-500' : 'bg-emerald-500'
                             }`}
                             style={{ width: `${mine.complianceScore}%` }}
                           />
                         </div>
                         <span className={`font-mono font-bold ${
-                          mine.complianceScore < 80 ? 'text-red-600' :
-                          mine.complianceScore < 90 ? 'text-amber-600' : 'text-emerald-700'
+                          mine.complianceScore < 65 ? 'text-red-600' :
+                          mine.complianceScore < 80 ? 'text-amber-600' : 'text-emerald-700'
                         }`}>
                           {mine.complianceScore}%
                         </span>
                       </div>
-                    </td>
-                    <td className="py-3 px-4 whitespace-nowrap">
-                      <div className="text-slate-800 font-medium">{mine.productionCapacityMTPA} MTPA</div>
-                      <div className="text-slate-500 text-[11px]">{mine.activeReports} citizen reports</div>
                     </td>
                     <td className="py-3 px-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">

@@ -10,6 +10,7 @@ interface SurveillanceMapProps {
   onSelectMine: (mine: MineRecord) => void;
   onInvestigateEvidence: (mine: MineRecord) => void;
   filterState: string;
+  filterSubsidiary?: string;
   filterRisk: string;
 }
 
@@ -19,6 +20,7 @@ export default function SurveillanceMap({
   onSelectMine,
   onInvestigateEvidence,
   filterState,
+  filterSubsidiary = 'All Subsidiaries',
   filterRisk
 }: SurveillanceMapProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -28,15 +30,15 @@ export default function SurveillanceMap({
   const [mapType, setMapType] = useState<'satellite' | 'topo' | 'street'>('satellite');
   const [showBoundaryLayers, setShowBoundaryLayers] = useState<boolean>(true);
 
-  // Initialize Leaflet map
+  // Initialize Leaflet map centered on Central India ([22.5, 82.0], zoom: 5)
   useEffect(() => {
     if (!mapContainerRef.current) return;
     if (mapInstanceRef.current) return;
 
-    // Centered on Eastern India Mining Corridor (Jharkhand, Bengal, Odisha, Chhattisgarh)
+    // Centered on Central India ([22.5, 82.0], zoom: 5) so all 25 nationwide mines are visible
     const map = L.map(mapContainerRef.current, {
-      center: [23.9, 85.8],
-      zoom: 7,
+      center: [22.5, 82.0],
+      zoom: 5,
       zoomControl: false,
       attributionControl: false
     });
@@ -114,6 +116,43 @@ export default function SurveillanceMap({
     (map as any)._activeTileLayer = nextLayer;
   }, [mapType]);
 
+  // Smoothly fly/pan to cluster bounds when State or Subsidiary filter changes
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const hasStateFilter = filterState && filterState !== 'All States';
+    const hasSubFilter = filterSubsidiary && filterSubsidiary !== 'All Subsidiaries';
+
+    if (hasStateFilter || hasSubFilter) {
+      const clusterMines = mines.filter(m => {
+        if (hasStateFilter && m.state !== filterState) return false;
+        if (hasSubFilter && m.subsidiary !== filterSubsidiary) return false;
+        return true;
+      });
+
+      if (clusterMines.length > 0) {
+        if (clusterMines.length === 1) {
+          map.flyTo([clusterMines[0].latitude, clusterMines[0].longitude], 9, {
+            duration: 1.2
+          });
+        } else {
+          const bounds = L.latLngBounds(
+            clusterMines.map(m => [m.latitude, m.longitude] as [number, number])
+          );
+          map.flyToBounds(bounds, {
+            padding: [50, 50],
+            maxZoom: 9,
+            duration: 1.2
+          });
+        }
+      }
+    } else {
+      // Both filters cleared: smoothly fly back to Central India
+      map.flyTo([22.5, 82.0], 5, { duration: 1.0 });
+    }
+  }, [filterState, filterSubsidiary, mines]);
+
   // Update Markers and Overlays based on filters and selectedMine
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -124,44 +163,58 @@ export default function SurveillanceMap({
     markersGroup.clearLayers();
     overlaysGroup.clearLayers();
 
-    // Filter mines
+    // Filter mines based on state, subsidiary, and risk
     const filteredMines = mines.filter(m => {
       if (filterState !== 'All States' && m.state !== filterState) return false;
-      if (filterRisk === 'Critical Only' && m.status !== 'critical') return false;
-      if (filterRisk === 'Monitor' && m.status !== 'monitor') return false;
-      if (filterRisk === 'Compliant' && m.status !== 'compliant') return false;
+      if (filterSubsidiary && filterSubsidiary !== 'All Subsidiaries' && m.subsidiary !== filterSubsidiary) return false;
+      
+      // Filter risk thresholds
+      if (filterRisk === 'Critical Only' || filterRisk === 'Critical Breaches (<65%)') {
+        if (m.complianceScore >= 65 && m.status !== 'critical') return false;
+      } else if (filterRisk === 'Monitor' || filterRisk === 'Needs Monitoring (65-79%)') {
+        if (m.complianceScore < 65 || m.complianceScore >= 80) return false;
+      } else if (filterRisk === 'Compliant' || filterRisk === 'Compliant (>=80%)') {
+        if (m.complianceScore < 80) return false;
+      }
       return true;
     });
 
     filteredMines.forEach(mine => {
       const isSelected = selectedMine?.id === mine.id;
-      const isCritical = mine.status === 'critical';
-      const isMonitor = mine.status === 'monitor';
+      
+      // Color-coded CircleMarkers:
+      // Green (#10B981) for COMPLIANT (Score >= 80)
+      // Amber (#F59E0B) for NEEDS_MONITORING (Score 65-79)
+      // Pulsing Red (#EF4444) for CRITICAL_BREACH (Score < 65: Rajmahal, Jharia, Kaniha)
+      const isCritical = mine.complianceScore < 65 || mine.status === 'critical';
+      const isNeedsMonitoring = !isCritical && mine.complianceScore >= 65 && mine.complianceScore < 80;
+      const isCompliant = !isCritical && mine.complianceScore >= 80;
 
-      const markerColor = isCritical ? '#dc2626' : isMonitor ? '#d97706' : '#10b981';
+      const markerColor = isCritical ? '#EF4444' : isNeedsMonitoring ? '#F59E0B' : '#10B981';
+      const statusLabel = isCritical ? 'CRITICAL_BREACH' : isNeedsMonitoring ? 'NEEDS_MONITORING' : 'COMPLIANT';
 
-      // Custom DivIcon
+      const isRajmahal = mine.id === 'MIN-4492-R' || mine.name.toLowerCase().includes('rajmahal');
+
+      // Custom DivIcon styled as a CircleMarker with pulsing ring for critical breach
       const iconHtml = `
-        <div class="relative flex items-center justify-center cursor-pointer group" style="transform: translate(-50%, -50%);">
-          ${isCritical ? `<div class="absolute -inset-2.5 rounded-full bg-red-600/30 animate-ping"></div>` : ''}
-          <div class="w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 ${
+        <div class="relative flex items-center justify-center cursor-pointer" style="transform: translate(-50%, -50%);">
+          ${isCritical ? `
+            <div class="absolute -inset-2.5 rounded-full bg-red-500/40 animate-ping pointer-events-none"></div>
+            <div class="absolute -inset-4 rounded-full bg-red-500/20 animate-pulse pointer-events-none"></div>
+          ` : ''}
+          <div class="w-7 h-7 rounded-full flex items-center justify-center shadow-md transition-all duration-200 ${
             isSelected 
-              ? 'ring-4 ring-white ring-offset-2 ring-offset-blue-600 scale-125' 
+              ? 'ring-4 ring-white ring-offset-2 ring-offset-blue-700 scale-125 z-30' 
               : 'hover:scale-115'
           }" style="background-color: ${markerColor}; border: 2px solid #ffffff;">
-            <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              ${isCritical 
-                ? '<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />'
-                : isMonitor
-                ? '<circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />'
-                : '<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />'
-              }
-            </svg>
+            <span class="text-[9px] font-black text-white leading-none font-mono">
+              ${mine.subsidiary.slice(0, 3)}
+            </span>
           </div>
           ${isCritical ? `
-            <div class="absolute -top-7 left-1/2 -translate-x-1/2 bg-red-950/95 text-white font-mono text-[9px] px-2 py-0.5 rounded border border-red-500 whitespace-nowrap shadow-md pointer-events-none flex items-center gap-1">
+            <div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-red-950/95 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-500 whitespace-nowrap shadow-md pointer-events-none flex items-center gap-1">
               <span class="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse"></span>
-              ${mine.name.split(' ')[0]} (Deviation)
+              ${mine.name.split(' ')[0]} (${mine.complianceScore}%)
             </div>
           ` : ''}
         </div>
@@ -170,60 +223,76 @@ export default function SurveillanceMap({
       const customIcon = L.divIcon({
         className: 'custom-leaflet-mine-marker',
         html: iconHtml,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
       });
 
       const marker = L.marker([mine.latitude, mine.longitude], { icon: customIcon });
 
-      // Leaflet popup
+      const totalWorkers = mine.workforceSplit?.total || mine.activeWorkforce || 412;
+      const permWorkers = mine.workforceSplit?.permanent || Math.round(totalWorkers * 0.55);
+      const contWorkers = mine.workforceSplit?.contractual || (totalWorkers - permWorkers);
+
+      // Leaflet popup displaying Mine Name, Subsidiary, Compliance Score, Active Workforce, and CTA
       const popupContent = `
-        <div style="font-family: inherit; min-width: 220px; padding: 4px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-            <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: ${markerColor}; background: ${markerColor}15; padding: 2px 6px; border-radius: 4px;">
-              ${mine.status}
+        <div style="font-family: inherit; min-width: 250px; padding: 4px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+            <span style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: ${markerColor}; background: ${markerColor}18; padding: 2px 6px; border-radius: 4px; border: 1px solid ${markerColor}40;">
+              ${statusLabel.replace('_', ' ')}
             </span>
-            <span style="font-size: 10px; font-family: monospace; color: #64748b;">${mine.id}</span>
+            <span style="font-size: 10px; font-family: monospace; font-weight: 700; color: #1e293b; background: #e2e8f0; padding: 1px 5px; border-radius: 3px;">
+              ${mine.subsidiary}
+            </span>
           </div>
-          <h4 style="margin: 0 0 4px 0; font-size: 13px; font-weight: 700; color: #0f172a; line-height: 1.2;">
+
+          <h4 style="margin: 0 0 3px 0; font-size: 13px; font-weight: 700; color: #0f172a; line-height: 1.25;">
             ${mine.name}
           </h4>
-          <p style="margin: 0 0 6px 0; font-size: 11px; color: #475569;">
-            ${mine.operator} &bull; ${mine.region}, ${mine.state}
+
+          <p style="margin: 0 0 6px 0; font-size: 11px; color: #64748b;">
+            ${mine.basin} &bull; ${mine.region}, ${mine.state}
           </p>
-          <div style="display: flex; justify-content: space-between; font-size: 11px; background: #f8fafc; padding: 6px; border-radius: 4px; border: 1px solid #e2e8f0; margin-bottom: 8px;">
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #f8fafc; padding: 7px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 8px;">
             <div>
-              <div style="font-size: 9px; text-transform: uppercase; color: #64748b;">Compliance</div>
-              <div style="font-weight: 700; color: ${markerColor};">${mine.complianceScore}%</div>
+              <div style="font-size: 9px; text-transform: uppercase; font-weight: 600; color: #64748b;">Compliance Score</div>
+              <div style="font-size: 14px; font-weight: 800; color: ${markerColor};">${mine.complianceScore}%</div>
             </div>
             <div>
-              <div style="font-size: 9px; text-transform: uppercase; color: #64748b;">Reports</div>
-              <div style="font-weight: 700; color: #0f172a;">${mine.activeReports} Active</div>
-            </div>
-            <div>
-              <div style="font-size: 9px; text-transform: uppercase; color: #64748b;">Capacity</div>
-              <div style="font-weight: 700; color: #0f172a;">${mine.productionCapacityMTPA} MTPA</div>
+              <div style="font-size: 9px; text-transform: uppercase; font-weight: 600; color: #64748b;">Active Workforce</div>
+              <div style="font-size: 12px; font-weight: 700; color: #0f172a;">${totalWorkers.toLocaleString()}</div>
+              <div style="font-size: 9px; color: #64748b;">${permWorkers} Reg / ${contWorkers} Cont</div>
             </div>
           </div>
+
           ${mine.unauthorizedAreaHa ? `
-            <div style="font-size: 10px; background: #fef2f2; color: #991b1b; padding: 4px 6px; border-radius: 4px; border: 1px solid #fecaca; margin-bottom: 8px; font-weight: 600;">
-              Encroachment Alert: ${mine.unauthorizedAreaHa} Ha detected outside lease!
+            <div style="font-size: 10px; background: #fef2f2; color: #991b1b; padding: 5px 7px; border-radius: 4px; border: 1px solid #fecaca; margin-bottom: 8px; font-weight: 600; line-height: 1.3;">
+              &bull; Encroachment Alert: ${mine.unauthorizedAreaHa} Ha detected beyond lease boundary
             </div>
           ` : ''}
-          <div style="display: flex; gap: 6px;">
-            <button id="popup-select-${mine.id.replace(/[^a-zA-Z0-9]/g, '')}" style="flex: 1; padding: 5px 8px; font-size: 11px; font-weight: 600; background: #0A192F; color: #ffffff; border: none; border-radius: 4px; cursor: pointer;">
-              Select Mine
-            </button>
-            ${mine.status === 'critical' ? `
-              <button id="popup-investigate-${mine.id.replace(/[^a-zA-Z0-9]/g, '')}" style="flex: 1; padding: 5px 8px; font-size: 11px; font-weight: 600; background: #1E40AF; color: #ffffff; border: none; border-radius: 4px; cursor: pointer;">
-                Evidence
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; gap: 6px;">
+              <button id="popup-select-${mine.id.replace(/[^a-zA-Z0-9]/g, '')}" style="flex: 1; padding: 6px 8px; font-size: 11px; font-weight: 600; background: #0A192F; color: #ffffff; border: none; border-radius: 4px; cursor: pointer;">
+                Select Mine
+              </button>
+              ${isCritical && !isRajmahal ? `
+                <button id="popup-investigate-${mine.id.replace(/[^a-zA-Z0-9]/g, '')}" style="flex: 1; padding: 6px 8px; font-size: 11px; font-weight: 600; background: #1E40AF; color: #ffffff; border: none; border-radius: 4px; cursor: pointer;">
+                  Evidence
+                </button>
+              ` : ''}
+            </div>
+
+            ${isRajmahal ? `
+              <button id="popup-investigate-${mine.id.replace(/[^a-zA-Z0-9]/g, '')}" style="width: 100%; padding: 7px 10px; font-size: 11px; font-weight: 700; background: #EF4444; color: #ffffff; border: none; border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                <span>Investigate Anomaly &amp; Telemetry (ENV-082) &rarr;</span>
               </button>
             ` : ''}
           </div>
         </div>
       `;
 
-      marker.bindPopup(popupContent, { maxWidth: 280, className: 'leaflet-custom-popup' });
+      marker.bindPopup(popupContent, { maxWidth: 290, className: 'leaflet-custom-popup' });
 
       marker.on('click', () => {
         onSelectMine(mine);
@@ -249,9 +318,9 @@ export default function SurveillanceMap({
       markersGroup.addLayer(marker);
     });
 
-    // Add Boundary Overlays for Rajmahal OCP
+    // Add Boundary Overlays for Rajmahal OCP (demonstration benchmark)
     if (showBoundaryLayers) {
-      // Approved Statutory Lease Area Polygon (Green / Cyan boundary)
+      // Approved Statutory Lease Area Polygon (Green boundary)
       const approvedLeasePolygon = L.polygon([
         [25.045, 87.375],
         [25.042, 87.418],
@@ -282,7 +351,7 @@ export default function SurveillanceMap({
       overlaysGroup.addLayer(approvedLeasePolygon);
       overlaysGroup.addLayer(encroachmentPolygon);
     }
-  }, [mines, selectedMine, filterState, filterRisk, showBoundaryLayers]);
+  }, [mines, selectedMine, filterState, filterSubsidiary, filterRisk, showBoundaryLayers]);
 
   // Pan to selected mine when selectedMine changes
   useEffect(() => {
@@ -303,7 +372,7 @@ export default function SurveillanceMap({
   };
 
   const handleReset = () => {
-    mapInstanceRef.current?.flyTo([23.9, 85.8], 7, { duration: 1.0 });
+    mapInstanceRef.current?.flyTo([22.5, 82.0], 5, { duration: 1.0 });
   };
 
   return (
@@ -312,9 +381,9 @@ export default function SurveillanceMap({
       <div className="absolute top-3 left-3 right-3 z-[1000] flex items-center justify-between pointer-events-none">
         <div className="bg-white/95 backdrop-blur-sm border border-slate-200 px-3 py-1.5 rounded-lg shadow-md flex items-center gap-2 pointer-events-auto">
           <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
-          <span className="text-xs font-bold text-slate-800">Live Satellite Radar Telemetry</span>
+          <span className="text-xs font-bold text-slate-800">Nationwide 25-Mine Geospatial Registry</span>
           <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-            Sentinel-2 / SAR Sync Active
+            All Major Belts &bull; Sentinel-2 Sync
           </span>
         </div>
 
@@ -367,22 +436,22 @@ export default function SurveillanceMap({
       <div className="absolute top-16 right-3 z-[1000] flex flex-col gap-1.5">
         <button
           onClick={handleZoomIn}
-          className="w-8 h-8 bg-white/95 backdrop-blur-sm text-slate-700 hover:bg-slate-100 border border-slate-300 rounded shadow-md flex items-center justify-center transition-colors"
+          className="w-8 h-8 bg-white/95 backdrop-blur-sm text-slate-700 hover:bg-slate-100 border border-slate-300 rounded shadow-md flex items-center justify-center transition-colors cursor-pointer"
           title="Zoom In"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
         <button
           onClick={handleZoomOut}
-          className="w-8 h-8 bg-white/95 backdrop-blur-sm text-slate-700 hover:bg-slate-100 border border-slate-300 rounded shadow-md flex items-center justify-center transition-colors"
+          className="w-8 h-8 bg-white/95 backdrop-blur-sm text-slate-700 hover:bg-slate-100 border border-slate-300 rounded shadow-md flex items-center justify-center transition-colors cursor-pointer"
           title="Zoom Out"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
         <button
           onClick={handleReset}
-          className="w-8 h-8 bg-white/95 backdrop-blur-sm text-slate-700 hover:bg-slate-100 border border-slate-300 rounded shadow-md flex items-center justify-center transition-colors"
-          title="Reset View to National Mining Corridor"
+          className="w-8 h-8 bg-white/95 backdrop-blur-sm text-slate-700 hover:bg-slate-100 border border-slate-300 rounded shadow-md flex items-center justify-center transition-colors cursor-pointer"
+          title="Reset View to Central India [22.5, 82.0]"
         >
           <RotateCcw className="w-4 h-4" />
         </button>
@@ -390,19 +459,19 @@ export default function SurveillanceMap({
 
       {/* Floating Status Legend */}
       <div className="absolute bottom-3 left-3 z-[1000] bg-white/95 backdrop-blur-sm border border-slate-300 rounded-lg p-3 shadow-md">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Surveillance Legend</div>
+        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">25-Mine Registry Legend</div>
         <div className="flex flex-col gap-1.5 text-xs text-slate-700 font-medium">
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-red-600 border border-white shadow-xs"></span>
-            <span>Critical Deviation (SCN Notice)</span>
+            <span className="w-3 h-3 rounded-full bg-[#EF4444] border border-white shadow-xs"></span>
+            <span>Critical Breach (&lt;65%: Rajmahal, Jharia, Kaniha)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-amber-500 border border-white shadow-xs"></span>
-            <span>Advisory Monitoring (&lt;90%)</span>
+            <span className="w-3 h-3 rounded-full bg-[#F59E0B] border border-white shadow-xs"></span>
+            <span>Needs Monitoring (Score 65-79)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-emerald-500 border border-white shadow-xs"></span>
-            <span>Statutory Compliant (&gt;90%)</span>
+            <span className="w-3 h-3 rounded-full bg-[#10B981] border border-white shadow-xs"></span>
+            <span>Compliant (Score &ge;80)</span>
           </div>
           {showBoundaryLayers && (
             <div className="pt-1.5 border-t border-slate-200 flex flex-col gap-1 text-[11px] text-slate-600">
@@ -423,7 +492,7 @@ export default function SurveillanceMap({
       <div 
         id="surveillance-leaflet-map"
         ref={mapContainerRef} 
-        style={{ height: '600px', width: '100%' }}
+        style={{ height: '640px', width: '100%' }}
         className="w-full z-0 cursor-grab active:cursor-grabbing"
       />
     </div>

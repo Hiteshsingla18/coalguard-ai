@@ -198,7 +198,7 @@ export default function CitizenVigilance({
                     <MapPin className="w-3 h-3 text-emerald-600" />
                     <span>Simulated GPS Geotag: 25.021°N, 87.398°E</span>
                   </div>
-                  <p>Your coordinates assist CoalGuard AI in pinpointing distance from the legal boundary.</p>
+                  <p>Your coordinates assist KhananRakshak AI in pinpointing distance from the legal boundary.</p>
                 </div>
 
                 <button
